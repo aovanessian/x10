@@ -15,7 +15,11 @@ private SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private volatile boolean _data_available = false;
 private volatile int _data_len = 0;
-
+private static final int DEBUG = 7;
+private static final int INFO = 6;
+private static final int WARN = 5;
+private static final int ERROR = 4;
+private int _level = 6;
 
 /*
 	All Units Off			0000		0
@@ -45,8 +49,14 @@ public final void list_ports()
 {
 	SerialPort[] ports = SerialPort.getCommPorts();
 	for (int i = 0; i < ports.length; i++) {
-		System.out.println(port_settings(ports[i]));
+		log(INFO, port_settings(ports[i]));
 	}
+}
+
+public final void log(int level, String msg)
+{
+	if (level <= _level)
+		System.out.println(msg);
 }
 
 public void readData()
@@ -59,7 +69,7 @@ public void readData()
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
 	_data_available = true;
 	_data_len = n;
-	System.out.println("\tGot  " + hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+	log(DEBUG, "\tGot  " + hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
 }
 
 public void setup()
@@ -109,13 +119,13 @@ private int checksum(byte[] buf, int n)
 
 private int wait4data()
 {
-	int z = 100;
+	int z = 250;
 	do {
 		if (_data_available && _data_len > 0) {
 			_data_available = false;
 			int result = _data_len;
 			_data_len = 0;
-			System.out.println("\t\tWaited for " + DELAY * (100 - z) + "ms");
+			log(DEBUG, "\t\tWaited for " + DELAY * (250 - z) + "ms");
 			return result;
 		}
 		try {
@@ -124,7 +134,7 @@ private int wait4data()
 			e.printStackTrace();
 		}
 	} while (z-- > 0);
-	System.out.println("\t\tTimed out waiting for data");
+	log(WARN, "\t\tTimed out waiting for data");
 	return 0;
 }
 
@@ -138,7 +148,7 @@ private void command(byte[] buf, int n)
 		if (k == 0)
 			continue;
 		if (k == 1 && _buf[0] == 0xa5) {
-			System.out.println("!\tInterface wants to send data, aborting command");
+			log(WARN, "!\tInterface wants to send data, aborting command");
 			return;
 		}
 		z = checksum(_buf, k);
@@ -146,7 +156,7 @@ private void command(byte[] buf, int n)
 	send(0);
 	k = wait4data();
 	if (checksum(_buf, k) == 0x55)
-		System.out.println("\tCommand successful");
+		log(DEBUG, "\tCommand successful");
 }
 
 private int send(int b)
@@ -158,13 +168,13 @@ private int send(int b)
 
 public int send(byte[] buf, int n)
 {
-	System.out.println("\tSent " + hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
+	log(DEBUG, "\tSent " + hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
 	return _port.writeBytes(buf, n);
 }
 
 public void address(int house, int unit)
 {
-	System.out.println("\tAddressing " + device_string(house, unit));
+	log(DEBUG, "\tAddressing " + device_string(house, unit));
 	byte[] buf = new byte[2];
 	buf[0] = (byte)4;
 	buf[1] = (byte)(house(house) | device(unit));
@@ -173,7 +183,7 @@ public void address(int house, int unit)
 
 public void function(int house, int dim, int command)
 {
-	System.out.println("\tFunction " + command + ", dim " + dim);
+	log(DEBUG, "\tFunction " + command + ", dim " + dim);
 	byte[] buf = new byte[2];
 	buf[0] = (byte)((dim << 3) | 6);
 	buf[1] = (byte)(house(house) | command);
@@ -182,13 +192,13 @@ public void function(int house, int dim, int command)
 
 private long time(String cmd)
 {
-	System.out.println("Sending " + cmd + " command");
+	log(INFO, "Sending " + cmd + " command");
 	return System.currentTimeMillis();
 }
 
 private void time(long t)
 {
-	System.out.println("took " + (System.currentTimeMillis() - t) + "ms");
+	log(INFO, "took " + (System.currentTimeMillis() - t) + "ms");
 }
 
 public void cmd_on(int house, int unit)
@@ -230,9 +240,9 @@ public void cmd_status(int house, int unit)
 	function(house, 0, 0xf);
 	int k = wait4data(); //expecting 0x5a
 	if (k == 0) {
-		System.out.println("Device " + device_string(house, unit) + " not responding to status command");
+		log(WARN, "Device " + device_string(house, unit) + " not responding to status command");
 	} else if ((_buf[0] & 0xff) == 0x5a) {
-		System.out.println("\tgetting status");
+		log(DEBUG, "\tgetting status");
 		send(0xc3);
 		wait4data();
 	}
@@ -247,7 +257,7 @@ private void set_clock()
 	int hour = calendar.get(Calendar.HOUR);
 	int minute = calendar.get(Calendar.MINUTE);
 	int second = calendar.get(Calendar.SECOND);
-	System.out.println(wd + ", " + day + ", " + hour + ":" + minute + ":" + second);
+	log(DEBUG, wd + ", " + day + ", " + hour + ":" + minute + ":" + second);
 	int clear = 0;//1;
 	byte[] buf = new byte[7];
 
@@ -339,21 +349,23 @@ public static void main(String[] args)
 	//comm.list_ports();
 	comm.setup();
 //	comm.set_clock();
-/*
+
 	comm.cmd_on(HOUSE, 1);
 	comm.cmd_off(HOUSE, 1);
 	comm.cmd_on(HOUSE, 8);
 	comm.cmd_dim(HOUSE, 8, 11);
-*/
-	
+/*
 	//comm.wait4data();
 	comm.send(0xc3);
 	comm.send(0xc3);
 	comm.wait4data();
+*/
+/*
 	comm.cmd_on(HOUSE, 1);
 	comm.cmd_status(HOUSE, 1);
 	comm.cmd_off(HOUSE, 1);
 	comm.cmd_status(HOUSE, 1);
+*/
 	
 //	comm.cmd_bright(HOUSE, 7, 22);
 //	comm.cmd_dim(HOUSE, 7, 18);
