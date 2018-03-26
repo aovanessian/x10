@@ -330,15 +330,11 @@ private static final int a2 = 3; // O3	RR466 appliance module 3 prong
 private static final int d1 = 5; // O5	HD465 dimmer module
 private static final int d2 = 7; // 07	WS467 dimmer switch
 
-public static void main(String[] args)
+public void event_loop()
 {
-	Serial comm = new Serial(args[0]);
-	comm.setup();
-//	comm.list_ports();
-	int z = 100, k;
-	int[] units = {3};
 	Command on = new Command(Cmd.ON, HOUSE, 2, 2);
 	Command all_off = new Command(Cmd.ALL_OFF, HOUSE, 2, 2);
+	int z = 100, k;
 
 	do {
 		switch (_buf[0] & 0xff) {
@@ -349,24 +345,23 @@ public static void main(String[] args)
 			k = 0;
 			X10.debug("Interface has data for us");
 			while ((_buf[0] & 0xff) == 0x5a) {
-				comm.send(0xc3);
-				k = comm.listen(500);
+				send(0xc3);
+				k = listen(500);
 			}
 			parse_status(k);
 			break;
 		case 0xa5:
 			X10.debug("Interface asks for clock");
-			comm.set_clock(HOUSE);
+			set_clock(HOUSE);
 		}
 
-		if (!comm.cmd(on))
+		if (!cmd(on))
 			continue;
-		if (!comm.cmd(all_off)) {
+		if (!cmd(all_off)) {
 			continue;
 		}
-		comm.listen(1050);
+		listen(1050);
 	} while (--z > 0);
-	comm.teardown();
 }
 
 }

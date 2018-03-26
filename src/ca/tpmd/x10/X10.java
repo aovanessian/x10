@@ -73,4 +73,12 @@ public static final String hex(byte[] buf, int n)
         return result.toString();
 }
 
+public static void main(String[] args)
+{
+	Serial comm = new Serial(args[0]);
+	comm.setup();
+	comm.event_loop();
+	comm.teardown();
+}
+
 }
