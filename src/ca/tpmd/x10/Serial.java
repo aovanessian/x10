@@ -13,7 +13,6 @@ private final static byte[] _sbuf = new byte[64];
 private final String _name;
 private SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
-private volatile boolean _data_available = false;
 private volatile int _data_len = 0;
 
 public Serial(String name)
@@ -41,7 +40,6 @@ public void readData()
 {
 	delay(50);
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
-	_data_available = true;
 	_data_len = n;
 	X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
 }
@@ -92,8 +90,7 @@ private int listen(int ms)
 	int k = z;
 	X10.timing("\t\tlisten delay: " + ms + "ms");
 	do {
-		if (_data_available && _data_len > 0) {
-			_data_available = false;
+		if (_data_len > 0) {
 			int result = _data_len;
 			_data_len = 0;
 			X10.timing("\t\tWaited for " + DELAY * (k - z) + "ms");
@@ -340,7 +337,7 @@ public static void main(String[] args)
 //	comm.list_ports();
 	int z = 100, k;
 	int[] units = {3};
-	Command on = new Command(Cmd.ON, HOUSE, units, 2);
+	Command on = new Command(Cmd.ON, HOUSE, 2, 2);
 	Command all_off = new Command(Cmd.ALL_OFF, HOUSE, 2, 2);
 
 	do {
