@@ -224,41 +224,6 @@ public static void parse_status(int n)
 	X10.info(s.toString());
 }
 
-public boolean cmd(Cmd func, Code house)
-{
-	if (func.need_addr()) {
-		X10.err("Command '" + func.label() + "' needs address");
-		return false;
-	}
-	if (func.need_dim()) {
-		X10.err("Command '" + func.label() + "' needs dim level");
-		return false;
-	}
-	return cmd(func, house, null, 1);
-}
-
-public boolean cmd(Cmd func, Code house, int unit)
-{
-	if (!func.need_addr())
-		X10.warn("Command '" + func.label() + "' does not need an address");
-	if (func.need_dim()) {
-		X10.err("Command '" + func.label() + "' needs dim level");
-		return false;
-	}
-	int[] units = {unit};
-	return cmd(func, house, units, 1);
-}
-
-public boolean cmd(Cmd func, Code house, int unit, int dim)
-{
-	if (!func.need_addr())
-		X10.warn("Command '" + func.label() + "' does not need an address");
-	if (!func.need_dim())
-		X10.warn("Command '" + func.label() + "' does not need dim level");
-	int[] units = {unit};
-	return cmd(func, house, units, dim);
-}
-
 public boolean cmd(Command c)
 {
 	long t = time(c.cmdLabel());
@@ -274,25 +239,6 @@ public boolean cmd(Command c)
 	time(t);
 	return result == 0;
 	
-}
-
-public boolean cmd(Cmd func, Code house, int[] units, int dim)
-{
-	long t = time(func.label());
-	int result = 0;
-	if (func.need_addr()) {
-		for (int i = 0; i < units.length; i++) {
-			result = address(house.ordinal(), units[i]);
-			if (result != 0)
-				break;
-		}
-	}
-	if (result == 0) {
-		dim = (func.need_dim()) ? dim : 1;
-		function(house.ordinal(), dim, func.ordinal());
-	}
-	time(t);
-	return result == 0;
 }
 
 private static final String pad(int n)
