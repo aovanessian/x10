@@ -3,7 +3,7 @@ package ca.tpmd.x10;
 import com.fazecast.jSerialComm.SerialPort;
 import java.util.Calendar;
 
-public class Comm
+public final class Comm
 {
 
 private final static byte HOUSE = 'O';
@@ -21,26 +21,7 @@ private static final int TIMING = 6;
 private static final int INFO = 5;
 private static final int WARN = 4;
 private static final int ERR = 3;
-private static int _level = INFO;
-
-/*
-	All Units Off			0000		0
-	All Lights On			0001		1
-	On				0010		2
-	Off				0011		3
-	Dim				0100		4
-	Bright				0101		5
-	All Lights Off			0110		6
-	Extended Code			0111		7
-	Hail Request			1000		8
-	Hail Acknowledge		1001		9
-	Pre-set Dim (1)			1010		A
-	Pre-set Dim (2)			1011		B
-	Extended Data Transfer		1100		C
-	Status On			1101		D
-	Status Off			1110		E
-	Status Request			1111		F
-*/
+private static int _level = DEBUG;
 
 public Comm(String name)
 {
@@ -165,14 +146,13 @@ private void command(byte[] buf, int n, int delay)
 	} while (z != check);
 	send(0);
 	k = wait4data(delay);
-	if (checksum(_buf, k) == 0x55)
+	if ((_buf[0] & 0xff) == 0x55)
 		log(DEBUG, "\tCommand successful");
 }
 
 private int send(int b)
 {
-	byte[] buf = new byte[1];
-	buf[0] = (byte)(b & 0xff);
+	byte[] buf = {(byte)(b & 0xff)};
 	return send(buf, 1);
 }
 
@@ -185,19 +165,17 @@ public int send(byte[] buf, int n)
 public void address(int house, int unit)
 {
 	log(DEBUG, "\tAddressing " + device_string(house, unit));
-	byte[] buf = new byte[2];
-	buf[0] = (byte)4;
-	buf[1] = (byte)(house(house) | device(unit));
-	command(buf, 2);
+	_sbuf[0] = (byte)4;
+	_sbuf[1] = (byte)(house(house) | device(unit));
+	command(_sbuf, 2);
 }
 
 public void function(int house, int dim, int command)
 {
 	log(DEBUG, "\tFunction " + command + ", dim " + dim);
-	byte[] buf = new byte[2];
-	buf[0] = (byte)((dim << 3) | 6);
-	buf[1] = (byte)(house(house) | command);
-	command(buf, 2, 800 + dim * 200);
+	_sbuf[0] = (byte)((dim << 3) | 6);
+	_sbuf[1] = (byte)(house(house) | command);
+	command(_sbuf, 2, 800 + dim * 200);
 }
 
 private static long time(String cmd)
@@ -209,6 +187,63 @@ private static long time(String cmd)
 private static void time(long t)
 {
 	log(TIMING, "Took " + (System.currentTimeMillis() - t) + "ms");
+}
+
+public static void parse_status(int n)
+{
+	log(INFO, "Status data: " + hex(_buf, n));
+	int k = (_buf[0] & 0xff) + 1;
+	if (n > 11) {
+		log(ERR, "Status too long (" + n + " bytes)");
+		return;
+	}
+	if (n != k) {
+		log(ERR, "Truncated status: only " + n + " bytes out of " + k + " available");
+		return;
+	}
+	log(DEBUG, "Got " + k + " bytes to parse");
+	int map = _buf[1] & 0xff;
+	int p = 2;
+	int b;
+	int z;
+	StringBuilder s = new StringBuilder();
+	while (p < k) {
+		b = map & 1;
+		map >>>= 1;
+		log(DEBUG, "Byte at " + p + " is " + (b == 0 ? "address" : "function"));
+		z = _buf[p] & 0xff;
+		switch (b) {
+		case 0: //address
+			s.append("device ");
+			s.append(hex(z));
+			s.append(": ");
+			break;
+		case 1: //function
+			Cmd func = Cmd.lookup(z & 0xf);
+			//s.append("House code: ");
+			//s.append(hex(z >>> 4));
+			//s.append(": ");
+			s.append(func.label());
+			switch (func) {
+			case DIM:
+				s.append("m");
+			case BRIGHT:
+				s.append("ed by ");
+				s.append((_buf[++p] & 0xff) * 100 / 210);
+				s.append("%");
+				break;
+			case EXT_CODE:
+				s.append("data: ");
+				s.append(hex(_buf[++p]));
+				s.append(", command: ");
+				s.append(hex(_buf[++p]));
+				break;
+			}
+			s.append("; ");
+		}
+		p++;
+	}
+	log(INFO, s.toString());
 }
 
 public void cmd(Cmd func, int house)
@@ -258,24 +293,6 @@ public void cmd(Cmd func, int house, int[] units, int dim)
 	time(t);
 }
 
-public void cmd_status(int house, int unit)
-{
-	long t = time(Cmd.STATUS_REQ.label());
-	address(house, unit);
-	function(house, 0, Cmd.STATUS_REQ.ordinal());
-	log(DEBUG, "\tWaiting for interface to announce data");
-	int k = wait4data(1000); //expecting 0x5a
-	if (k == 0) {
-		log(WARN, "Device " + device_string(house, unit) + " not responding to status command");
-	} else if ((_buf[0] & 0xff) == 0x5a) {
-		log(DEBUG, "\tGetting status");
-		send(0xc3);
-		k = wait4data(100);
-		log(INFO, "\tStatus: " + hex(_buf, k));
-	}
-	time(t);
-}
-
 private static final String pad(int n)
 {
 	return (n < 10) ? "0" + n : "" + n;
@@ -292,19 +309,28 @@ private void set_clock()
 	int second = calendar.get(Calendar.SECOND);
 	log(DEBUG, weekdays[wd] + ", " + day + " day or year " + pad(hour) + ":" + pad(minute) + ":" + pad(second));
 	int clear = 0;//1;
-	byte[] buf = new byte[7];
 
-	buf[0] = (byte)0x9b;			/* CM11A timer download code */
-	buf[1] = (byte)second;
-	buf[2] = (byte)(minute + ((hour & 1) * 60))  ;  /* minutes 0 - 119 */
-	buf[3] = (byte)(hour >>> 1);		/* hour / 2         0 - 11 */
-	buf[4] = (byte)(day & 0xff);		/* mantisa of julian date */
-	buf[5] = (byte)((day >>> 15 ) << 7);	/* radix of julian date */
-	buf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
-	buf[6] = (byte)(house(HOUSE) | clear);
-	send(buf, 7);
+	_sbuf[0] = (byte)0x9b;			/* CM11A timer download code */
+	_sbuf[1] = (byte)second;
+	_sbuf[2] = (byte)(minute + ((hour & 1) * 60))  ;  /* minutes 0 - 119 */
+	_sbuf[3] = (byte)(hour >>> 1);		/* hour / 2         0 - 11 */
+	_sbuf[4] = (byte)(day & 0xff);		/* mantisa of julian date */
+	_sbuf[5] = (byte)((day >>> 15 ) << 7);	/* radix of julian date */
+	_sbuf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
+	_sbuf[6] = (byte)(house(HOUSE) | clear);
+	send(_sbuf, 7);
 	int k = wait4data(800);
 	log(INFO, "Clock set response: " + hex(_buf, k));
+}
+
+private static final String hex(int n)
+{
+	int c = n & 0xff;
+	StringBuilder result = new StringBuilder(4);
+	result.append("0x");
+	result.append(_hex[c >>> 4]);
+	result.append(_hex[c & 0xf]);
+	return result.toString();
 }
 
 private static final String hex(byte[] buf, int n)
@@ -378,12 +404,11 @@ private static final String parity(int p)
 	return "unknown";
 }
 
-
 private static final int a1 = 1; // O1	HD501 rf receiver + appliance mmodule 2 prong
 private static final int a2 = 3; // O3	RR466 appliance module 3 prong
 private static final int d1 = 5; // O5	HD465 dimmer module
 private static final int d2 = 7; // 07	WS467 dimmer switch
-// 0x09 0x6a 0x41 0x42 0x41 0x42 0x41 0x42 0x45 0x3a
+
 public static void main(String[] args)
 {
 	Comm comm = new Comm(args[0]);
@@ -391,7 +416,7 @@ public static void main(String[] args)
 //	comm.list_ports();
 //	comm.set_clock();
 int k;
-int z = 5;
+int z = 20;
 int[] units = {a1, a2};
 Cmd c = Cmd.lookup(0xa);
 System.out.println(c);
@@ -403,20 +428,13 @@ do {
 		log(INFO, "Interface has data for us");
 		comm.send(0xc3);
 		k = comm.wait4data(500);
-		log(INFO, hex(_buf, k));
+		parse_status(k);
 		break;
 	case 0xa5:
 		log(INFO, "Interface asks for clock");
 		comm.set_clock();
 	}
-/*
-	comm.cmd_on(HOUSE, a1);
-	comm.cmd_on(HOUSE, a2);
-	comm.cmd_lights_on(HOUSE);
-*/
-	delay(1000);
-	delay(1000);
-	comm.cmd(Cmd.STATUS_REQ, HOUSE, a2);
+	comm.cmd(Cmd.HAIL_REQ, HOUSE, a1);
 } while (--z > 0);
 	//comm.cmd_status(HOUSE, a1);
 	//comm.cmd_status(HOUSE, a1);
@@ -425,63 +443,3 @@ do {
 
 }
 
-enum Cmd
-{
-// 			addr	dim	response length	label
-ALL_OFF			(false,	false,	0,		"all units off"),
-LIGHTS_ON		(false, false,	0,		"all lights on"),
-ON			(true, 	false,	0,		"on"),
-OFF			(true, 	false,	0,		"off"),
-DIM			(true, 	true,	1,		"dim"),
-BRIGHT			(true, 	true,	1,		"brighten"),
-LIGHTS_OFF		(false, false,	0,		"all lights off"),
-EXT_CODE		(true, 	false,	2,		"extended code"),
-HAIL_REQ		(true, 	false,	0,		"hail request"),
-HAIL_ACK		(true,	false,	0,		"hail acknowledge"),
-PRESET_DIM_1		(true,	true,	0,		"pre-set dim 1"),
-PRESET_DIM_2		(true,	true,	0,		"pre-set dim 2"),
-EXT_DATA_TFR		(true,	false,	0,		"extended data transfer"),
-STATUS_ON		(true,	false,	0,		"status on"),
-STATUS_OFF		(true,	false,	0,		"status off"),
-STATUS_REQ		(true,	false,	1,		"status request");
-
-private final boolean addr;
-private final boolean dim;
-private final int response_len;
-private final String label;
-private static final Cmd[] values = values();
-
-Cmd(boolean a, boolean d, int res, String l)
-{
-	addr = a;
-	dim = d;
-	response_len = res;
-	label = l;
-}
-
-static Cmd lookup(int n)
-{
-	return values[n];
-}
-
-boolean need_addr()
-{
-	return addr;
-}
-
-boolean need_dim()
-{
-	return dim;
-}
-
-int status_len()
-{
-	return response_len;
-}
-
-String label()
-{
-	return label;
-}
-
-}
