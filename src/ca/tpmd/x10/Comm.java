@@ -20,8 +20,8 @@ private static final int DEBUG = 7;
 private static final int TIMING = 6;
 private static final int INFO = 5;
 private static final int WARN = 4;
-private static final int ERROR = 3;
-private static int _level = DEBUG;
+private static final int ERR = 3;
+private static int _level = INFO;
 
 /*
 	All Units Off			0000		0
@@ -211,87 +211,58 @@ private static void time(long t)
 	log(TIMING, "Took " + (System.currentTimeMillis() - t) + "ms");
 }
 
-public void cmd_common(int house, int[] units, int func, int dim, String command)
+public void cmd(Cmd func, int house)
 {
-	long t = time(command);
-	for (int i = 0; i < units.length; i++)
-		address(house, units[i]);
-	function(house, dim, func);
+	if (func.need_addr()) {
+		log(ERR, "Command '" + func.label() + "' needs address");
+		return;
+	}
+	if (func.need_dim()) {
+		log(ERR, "Command '" + func.label() + "' needs dim level");
+		return;
+	}
+	cmd(func, house, null, 1);
+}
+
+public void cmd(Cmd func, int house, int unit)
+{
+	if (!func.need_addr())
+		log(WARN, "Command '" + func.label() + "' does not need an address");
+	if (func.need_dim()) {
+		log(ERR, "Command '" + func.label() + "' needs dim level");
+		return;
+	}
+	int[] units = {unit};
+	cmd(func, house, units, 1);
+}
+
+public void cmd(Cmd func, int house, int unit, int dim)
+{
+	if (!func.need_addr())
+		log(WARN, "Command '" + func.label() + "' does not need an address");
+	if (!func.need_dim())
+		log(WARN, "Command '" + func.label() + "' does not need dim level");
+	int[] units = {unit};
+	cmd(func, house, units, dim);
+}
+
+public void cmd(Cmd func, int house, int[] units, int dim)
+{
+	long t = time(func.label());
+	if (func.need_addr()) {
+		for (int i = 0; i < units.length; i++)
+			address(house, units[i]);
+	}
+	dim = (func.need_dim()) ? dim : 1;
+	function(house, dim, func.ordinal());
 	time(t);
-}
-
-public void fn_common(int house, int func, int dim, String command)
-{
-	long t = time(command);
-	function(house, dim, func);
-	time(t);
-}
-
-public void cmd_all_off(int house)
-{
-	fn_common(house, 0, 1, "all units off");
-}
-
-public void cmd_lights_on(int house)
-{
-	fn_common(house, 1, 1, "all lights on");
-}
-
-public void cmd_lights_off(int house)
-{
-	fn_common(house, 6, 1, "all lights off");
-}
-
-public void cmd_on(int house, int[] units)
-{
-	// with dim = 1, interface is done in 270ms; with dim = 0 it takes 450ms
-	cmd_common(house, units, 2, 1, "on");
-}
-
-public void cmd_on(int house, int unit)
-{
-	int[] units = {unit};
-	cmd_common(house, units, 2, 1, "on");
-}
-
-public void cmd_off(int house, int[] units)
-{
-	cmd_common(house, units, 3, 1, "off");
-}
-
-public void cmd_off(int house, int unit)
-{
-	int[] units = {unit};
-	cmd_common(house, units, 3, 1, "off");
-}
-
-public void cmd_dim(int house, int[] units, int dim)
-{
-	cmd_common(house, units, 4, dim, "dim");
-}
-
-public void cmd_dim(int house, int unit, int dim)
-{
-	int[] units = {unit};
-	cmd_common(house, units, 4, dim, "dim");
-}
-
-public void cmd_bright(int house, int[] units, int dim)
-{
-	cmd_common(house, units, 5, dim, "bright");
-}
-
-public void cmd_bright(int house, int unit, int dim)
-{
-	int[] units = {unit};
-	cmd_common(house, units, 5, dim, "bright");
 }
 
 public void cmd_status(int house, int unit)
 {
-	long t = time("status");
+	long t = time(Cmd.STATUS_REQ.label());
 	address(house, unit);
-	function(house, 0, 0xf);
+	function(house, 0, Cmd.STATUS_REQ.ordinal());
 	log(DEBUG, "\tWaiting for interface to announce data");
 	int k = wait4data(1000); //expecting 0x5a
 	if (k == 0) {
@@ -305,15 +276,21 @@ public void cmd_status(int house, int unit)
 	time(t);
 }
 
+private static final String pad(int n)
+{
+	return (n < 10) ? "0" + n : "" + n;
+}
+
 private void set_clock()
 {
+	String[] weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 	Calendar calendar = Calendar.getInstance();
 	int wd = calendar.get(Calendar.DAY_OF_WEEK);
 	int day = calendar.get(Calendar.DAY_OF_YEAR);
 	int hour = calendar.get(Calendar.HOUR);
 	int minute = calendar.get(Calendar.MINUTE);
 	int second = calendar.get(Calendar.SECOND);
-	log(DEBUG, wd + ", " + day + ", " + hour + ":" + minute + ":" + second);
+	log(DEBUG, weekdays[wd] + ", " + day + " day or year " + pad(hour) + ":" + pad(minute) + ":" + pad(second));
 	int clear = 0;//1;
 	byte[] buf = new byte[7];
 
@@ -338,7 +315,7 @@ private static final String hex(byte[] buf, int n)
 		c = buf[i] & 0xff;
 		result.append(" 0x");
 		result.append(_hex[c >>> 4]);
-		result.append(_hex[c & 15]);
+		result.append(_hex[c & 0xf]);
 	}
 	return result.toString();
 }
@@ -414,8 +391,11 @@ public static void main(String[] args)
 //	comm.list_ports();
 //	comm.set_clock();
 int k;
-int z = 1;
+int z = 5;
 int[] units = {a1, a2};
+Cmd c = Cmd.lookup(0xa);
+System.out.println(c);
+System.out.println(Cmd.ALL_OFF.ordinal());
 do {
 	comm.wait4data(1200);
 	switch (_buf[0] & 0xff) {
@@ -435,14 +415,73 @@ do {
 	comm.cmd_lights_on(HOUSE);
 */
 	delay(1000);
-	comm.cmd_on(HOUSE, units);
 	delay(1000);
-	comm.cmd_off(HOUSE, units);
-	//comm.cmd_all_off(HOUSE);
+	comm.cmd(Cmd.STATUS_REQ, HOUSE, a2);
 } while (--z > 0);
 	//comm.cmd_status(HOUSE, a1);
 	//comm.cmd_status(HOUSE, a1);
 	comm.teardown();
+}
+
+}
+
+enum Cmd
+{
+// 			addr	dim	response length	label
+ALL_OFF			(false,	false,	0,		"all units off"),
+LIGHTS_ON		(false, false,	0,		"all lights on"),
+ON			(true, 	false,	0,		"on"),
+OFF			(true, 	false,	0,		"off"),
+DIM			(true, 	true,	1,		"dim"),
+BRIGHT			(true, 	true,	1,		"brighten"),
+LIGHTS_OFF		(false, false,	0,		"all lights off"),
+EXT_CODE		(true, 	false,	2,		"extended code"),
+HAIL_REQ		(true, 	false,	0,		"hail request"),
+HAIL_ACK		(true,	false,	0,		"hail acknowledge"),
+PRESET_DIM_1		(true,	true,	0,		"pre-set dim 1"),
+PRESET_DIM_2		(true,	true,	0,		"pre-set dim 2"),
+EXT_DATA_TFR		(true,	false,	0,		"extended data transfer"),
+STATUS_ON		(true,	false,	0,		"status on"),
+STATUS_OFF		(true,	false,	0,		"status off"),
+STATUS_REQ		(true,	false,	1,		"status request");
+
+private final boolean addr;
+private final boolean dim;
+private final int response_len;
+private final String label;
+private static final Cmd[] values = values();
+
+Cmd(boolean a, boolean d, int res, String l)
+{
+	addr = a;
+	dim = d;
+	response_len = res;
+	label = l;
+}
+
+static Cmd lookup(int n)
+{
+	return values[n];
+}
+
+boolean need_addr()
+{
+	return addr;
+}
+
+boolean need_dim()
+{
+	return dim;
+}
+
+int status_len()
+{
+	return response_len;
+}
+
+String label()
+{
+	return label;
 }
 
 }
