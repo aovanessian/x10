@@ -43,7 +43,7 @@ public void readData()
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
 	_data_available = true;
 	_data_len = n;
-	X10.debug("\tGot  " + hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+	X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
 }
 
 public void setup()
@@ -139,7 +139,7 @@ private void send(int b)
 
 public void send(byte[] buf, int n)
 {
-	X10.debug("\tSent " + hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
+	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
 	_port.writeBytes(buf, n);
 }
 
@@ -172,7 +172,7 @@ private static void time(long t)
 
 public static void parse_status(int n)
 {
-	X10.info("Status data: " + hex(_buf, n));
+	X10.info("Status data: " + X10.hex(_buf, n));
 	int k = (_buf[0] & 0xff) + 1;
 	if (n > 11) {
 		X10.err("Status too long (" + n + " bytes)");
@@ -201,9 +201,6 @@ public static void parse_status(int n)
 			break;
 		case 1:
 			Cmd func = Cmd.lookup(z & 0xf);
-			//s.append("House code: ");
-			//s.append(hex(z >>> 4));
-			//s.append(": ");
 			s.append(func.label());
 			switch (func) {
 			case DIM:
@@ -215,9 +212,9 @@ public static void parse_status(int n)
 				break;
 			case EXT_CODE:
 				s.append("data: ");
-				s.append(hex(_buf[++p]));
+				s.append(X10.hex(_buf[++p]));
 				s.append(", command: ");
-				s.append(hex(_buf[++p]));
+				s.append(X10.hex(_buf[++p]));
 				break;
 			}
 			s.append("; ");
@@ -324,30 +321,7 @@ private void set_clock(Code house)
 	_sbuf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
 	_sbuf[6] = (byte)((house.ordinal() << 4) | clear);
 	send(_sbuf, 7);
-	X10.info("Clock set response: " + hex(_buf, listen(800)));
-}
-
-private static final String hex(int n)
-{
-	int c = n & 0xff;
-	StringBuilder result = new StringBuilder(4);
-	result.append("0x");
-	result.append(_hex[c >>> 4]);
-	result.append(_hex[c & 0xf]);
-	return result.toString();
-}
-
-private static final String hex(byte[] buf, int n)
-{
-	int c;
-	StringBuilder result = new StringBuilder(n * 5);
-	for (int i = 0; i < n; i++) {
-		c = buf[i] & 0xff;
-		result.append(" 0x");
-		result.append(_hex[c >>> 4]);
-		result.append(_hex[c & 0xf]);
-	}
-	return result.toString();
+	X10.info("Clock set response: " + X10.hex(_buf, listen(800)));
 }
 
 private static final String port_settings(SerialPort port)
