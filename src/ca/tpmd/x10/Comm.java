@@ -50,9 +50,8 @@ public Comm(String name)
 public final void list_ports()
 {
 	SerialPort[] ports = SerialPort.getCommPorts();
-	for (int i = 0; i < ports.length; i++) {
+	for (int i = 0; i < ports.length; i++)
 		log(INFO, port_settings(ports[i]));
-	}
 }
 
 public final void log(int level, String msg)
@@ -81,6 +80,7 @@ public void setup()
 	_port.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
 	_port.addDataListener(new Listener(this));
 	_port.openPort();
+	log(DEBUG, port_settings(_port));
 }
 
 public void teardown()
@@ -88,14 +88,14 @@ public void teardown()
 	if (_port == null)
 		return;
 	_port.closePort();
-	port_settings(_port);
+	log(DEBUG, port_settings(_port));
 	_port = null;
 }
 
 private String device_string(int house, int unit)
 {
 	StringBuilder result = new StringBuilder(2);
-	result.append((char)((house) & 0xff));
+	result.append((char)(house & 0xff));
 	result.append(unit);
 	return result.toString();
 }
@@ -216,6 +216,23 @@ public void cmd_common(int house, int unit, int func, int dim, String command)
 	address(house, unit);
 	function(house, dim, func);
 	time(t);
+}
+
+public void fn_common(int house, int func, int dim, String command)
+{
+	long t = time(command);
+	function(house, dim, func);
+	time(t);
+}
+
+public void cmd_all_off(int house)
+{
+	fn_common(house, 0, 1, "all units off");
+}
+
+public void cmd_lights_on(int house)
+{
+	fn_common(house, 1, 1, "all lights on");
 }
 
 public void cmd_on(int house, int unit)
@@ -353,16 +370,11 @@ private static final String parity(int p)
 	return "unknown";
 }
 
-// O1	HD501 rf receiver + appliance mmodule 2 prong
-// O3	RR466 appliance module 3 prong
-// O5	HD465 dimmer module
-// 07	WS467 dimmer switch
 
-private static final int a1 = 11;
-private static final int a2 = 3;
-private static final int d1 = 5;
-private static final int d2 = 7;
-
+private static final int a1 = 1; // O1	HD501 rf receiver + appliance mmodule 2 prong
+private static final int a2 = 3; // O3	RR466 appliance module 3 prong
+private static final int d1 = 5; // O5	HD465 dimmer module
+private static final int d2 = 7; // 07	WS467 dimmer switch
 
 public static void main(String[] args)
 {
@@ -377,8 +389,10 @@ public static void main(String[] args)
 	comm.wait4data();
 */
 	comm.cmd_on(HOUSE, a1);
+	comm.cmd_on(HOUSE, a2);
+	comm.cmd_lights_on(HOUSE);
+	comm.cmd_all_off(HOUSE);
 	//comm.cmd_status(HOUSE, a1);
-	comm.cmd_off(HOUSE, a1);
 	//comm.cmd_status(HOUSE, a1);
 	comm.teardown();
 }
