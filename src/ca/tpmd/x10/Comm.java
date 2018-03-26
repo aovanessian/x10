@@ -7,19 +7,21 @@ public class Comm
 {
 
 private final static byte HOUSE = 'O';
-private final static int DELAY = 20;
+private final static int DELAY = 10;
 private final static char[] _hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-private final static byte[] _buf = new byte[128];
+private final static byte[] _buf = new byte[64];
+private final static byte[] _sbuf = new byte[64];
 private final String _name;
 private SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private volatile boolean _data_available = false;
 private volatile int _data_len = 0;
 private static final int DEBUG = 7;
-private static final int INFO = 6;
-private static final int WARN = 5;
-private static final int ERROR = 4;
-private int _level = 6;
+private static final int TIMING = 6;
+private static final int INFO = 5;
+private static final int WARN = 4;
+private static final int ERROR = 3;
+private int _level = TIMING;
 
 /*
 	All Units Off			0000		0
@@ -62,7 +64,7 @@ public final void log(int level, String msg)
 public void readData()
 {
 	try {
-		Thread.sleep(DELAY);
+		Thread.sleep(20);
 	} catch (Exception e) {
 		e.printStackTrace();
 	}
@@ -117,15 +119,17 @@ private int checksum(byte[] buf, int n)
 	return z & 0xff;
 }
 
-private int wait4data()
+private int wait4data(int ms)
 {
-	int z = 250;
+	int z = (ms == 0) ? 5000 / DELAY : ms / DELAY;
+	int k = z;
+	log(TIMING, "\t\twait4data delay: " + ms + "ms");
 	do {
 		if (_data_available && _data_len > 0) {
 			_data_available = false;
 			int result = _data_len;
 			_data_len = 0;
-			log(DEBUG, "\t\tWaited for " + DELAY * (250 - z) + "ms");
+			log(TIMING, "\t\tWaited for " + DELAY * (k - z) + "ms");
 			return result;
 		}
 		try {
@@ -140,11 +144,16 @@ private int wait4data()
 
 private void command(byte[] buf, int n)
 {
+	command(buf, n, 800);
+}
+
+private void command(byte[] buf, int n, int delay)
+{
 	int check = checksum(buf, n);
 	int z = 0, k;
 	do {
 		send(buf, n);
-		k = wait4data();
+		k = wait4data(100);
 		if (k == 0)
 			continue;
 		if (k == 1 && _buf[0] == 0xa5) {
@@ -154,7 +163,7 @@ private void command(byte[] buf, int n)
 		z = checksum(_buf, k);
 	} while (z != check);
 	send(0);
-	k = wait4data();
+	k = wait4data(delay);
 	if (checksum(_buf, k) == 0x55)
 		log(DEBUG, "\tCommand successful");
 }
@@ -187,7 +196,7 @@ public void function(int house, int dim, int command)
 	byte[] buf = new byte[2];
 	buf[0] = (byte)((dim << 3) | 6);
 	buf[1] = (byte)(house(house) | command);
-	command(buf, 2);
+	command(buf, 2, 800 + dim * 200);
 }
 
 private long time(String cmd)
@@ -198,39 +207,36 @@ private long time(String cmd)
 
 private void time(long t)
 {
-	log(INFO, "took " + (System.currentTimeMillis() - t) + "ms");
+	log(TIMING, "Took " + (System.currentTimeMillis() - t) + "ms");
+}
+
+public void cmd_common(int house, int unit, int func, int dim, String command)
+{
+	long t = time(command);
+	address(house, unit);
+	function(house, dim, func);
+	time(t);
 }
 
 public void cmd_on(int house, int unit)
 {
-	long t = time("on");
-	address(house, unit);
-	function(house, 0, 2);
-	time(t);
+	// with dim = 1, interface is done in 270ms; with dim = 0 it takes 450ms
+	cmd_common(house, unit, 2, 1, "on");
 }
 
 public void cmd_off(int house, int unit)
 {
-	long t = time("off");
-	address(house, unit);
-	function(house, 0, 3);
-	time(t);
+	cmd_common(house, unit, 3, 1, "off");
 }
 
 public void cmd_dim(int house, int unit, int dim)
 {
-	long t = time("dim");
-	address(house, unit);
-	function(house, dim, 4);
-	time(t);
+	cmd_common(house, unit, 4, dim, "dim");
 }
 
 public void cmd_bright(int house, int unit, int dim)
 {
-	long t = time("bright");
-	address(house, unit);
-	function(house, dim, 5);
-	time(t);
+	cmd_common(house, unit, 5, dim, "bright");
 }
 
 public void cmd_status(int house, int unit)
@@ -238,13 +244,15 @@ public void cmd_status(int house, int unit)
 	long t = time("status");
 	address(house, unit);
 	function(house, 0, 0xf);
-	int k = wait4data(); //expecting 0x5a
+	log(DEBUG, "\tWaiting for interface to announce data");
+	int k = wait4data(1000); //expecting 0x5a
 	if (k == 0) {
 		log(WARN, "Device " + device_string(house, unit) + " not responding to status command");
 	} else if ((_buf[0] & 0xff) == 0x5a) {
-		log(DEBUG, "\tgetting status");
+		log(DEBUG, "\tGetting status");
 		send(0xc3);
-		wait4data();
+		k = wait4data(100);
+		log(INFO, "\tStatus: " + hex(_buf, k));
 	}
 	time(t);
 }
@@ -269,7 +277,9 @@ private void set_clock()
 	buf[5] = (byte)((day >>> 15 ) << 7);	/* radix of julian date */
 	buf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
 	buf[6] = (byte)(house(HOUSE) | clear);
-	command(buf, 7);
+	send(buf, 7);
+	int k = wait4data(800);
+	log(INFO, "Clock set response: " + hex(_buf, k));
 }
 
 private String hex(byte[] buf, int n)
@@ -343,35 +353,33 @@ private static final String parity(int p)
 	return "unknown";
 }
 
+// O1	HD501 rf receiver + appliance mmodule 2 prong
+// O3	RR466 appliance module 3 prong
+// O5	HD465 dimmer module
+// 07	WS467 dimmer switch
+
+private static final int a1 = 11;
+private static final int a2 = 3;
+private static final int d1 = 5;
+private static final int d2 = 7;
+
+
 public static void main(String[] args)
 {
 	Comm comm = new Comm(args[0]);
-	//comm.list_ports();
 	comm.setup();
+//	comm.list_ports();
 //	comm.set_clock();
 
-	comm.cmd_on(HOUSE, 1);
-	comm.cmd_off(HOUSE, 1);
-	comm.cmd_on(HOUSE, 8);
-	comm.cmd_dim(HOUSE, 8, 11);
 /*
-	//comm.wait4data();
 	comm.send(0xc3);
 	comm.send(0xc3);
 	comm.wait4data();
 */
-/*
-	comm.cmd_on(HOUSE, 1);
-	comm.cmd_status(HOUSE, 1);
-	comm.cmd_off(HOUSE, 1);
-	comm.cmd_status(HOUSE, 1);
-*/
-	
-//	comm.cmd_bright(HOUSE, 7, 22);
-//	comm.cmd_dim(HOUSE, 7, 18);
-//	comm.cmd_bright(HOUSE, 7, 22);
-	//comm.cmd_off(HOUSE, 8);
-	//comm.cmd_on('a', 1);
+	comm.cmd_on(HOUSE, a1);
+	//comm.cmd_status(HOUSE, a1);
+	comm.cmd_off(HOUSE, a1);
+	//comm.cmd_status(HOUSE, a1);
 	comm.teardown();
 }
 
