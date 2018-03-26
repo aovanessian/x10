@@ -3,7 +3,7 @@ package ca.tpmd.x10;
 import com.fazecast.jSerialComm.SerialPort;
 import java.util.Calendar;
 
-public final class Comm
+public final class Serial
 {
 
 private final static Code HOUSE = Code.O;
@@ -17,13 +17,14 @@ private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7
 private volatile boolean _data_available = false;
 private volatile int _data_len = 0;
 private static final int DEBUG = 7;
-private static final int TIMING = 6;
-private static final int INFO = 5;
-private static final int WARN = 4;
-private static final int ERR = 3;
+private static final int VERBOSE = 6;
+private static final int TIMING = 5;
+private static final int INFO = 4;
+private static final int WARN = 3;
+private static final int ERR = 2;
 private static int _level = INFO;
 
-public Comm(String name)
+public Serial(String name)
 {
 	_name = name;
 }
@@ -99,11 +100,11 @@ private static int checksum(byte[] buf, int n)
 	return z & 0xff;
 }
 
-private int wait4data(int ms)
+private int listen(int ms)
 {
 	int z = (ms == 0) ? 5000 / DELAY : ms / DELAY;
 	int k = z;
-	log(TIMING, "\t\twait4data delay: " + ms + "ms");
+	log(TIMING, "\t\tlisten delay: " + ms + "ms");
 	do {
 		if (_data_available && _data_len > 0) {
 			_data_available = false;
@@ -118,25 +119,30 @@ private int wait4data(int ms)
 	return 0;
 }
 
-private void command(byte[] buf, int n, int delay)
+private int command(byte[] buf, int n, int delay)
 {
 	int check = checksum(buf, n);
 	int z = 0, k;
 	do {
 		send(buf, n);
-		k = wait4data(100);
-		if (k == 0)
-			continue;
+		k = listen(100);
+		if (k == 0) {
+			log(VERBOSE, "!\tInterface did not respond, aborting command");
+			return 2;
+		}
 		if ((_buf[0] & 0xff) == 0x5a) {
-			log(WARN, "!\tInterface wants to send data, aborting command");
-			return;
+			log(VERBOSE, "!\tInterface wants to send data, aborting command");
+			return 1;
 		}
 		z = checksum(_buf, k);
 	} while (z != check);
 	send(0);
-	k = wait4data(delay);
-	if ((_buf[0] & 0xff) == 0x55)
+	listen(delay);
+	if ((_buf[0] & 0xff) == 0x55) {
 		log(DEBUG, "\tCommand successful");
+		return 0;
+	}
+	return 2;
 }
 
 private void send(int b)
@@ -151,20 +157,20 @@ public void send(byte[] buf, int n)
 	_port.writeBytes(buf, n);
 }
 
-public void address(int house, int unit)
+public int address(int house, int unit)
 {
 	log(DEBUG, "\tAddressing " + device_string(house, unit));
 	_sbuf[0] = (byte)4;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
-	command(_sbuf, 2, 800);
+	return command(_sbuf, 2, 800);
 }
 
-public void function(int house, int dim, int command)
+public int function(int house, int dim, int command)
 {
 	log(DEBUG, "\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
-	command(_sbuf, 2, 800 + dim * 200);
+	return command(_sbuf, 2, 800 + dim * 200);
 }
 
 private static long time(String cmd)
@@ -202,12 +208,12 @@ public static void parse_status(int n)
 		log(DEBUG, "Byte at " + p + " is " + (b == 0 ? "address" : "function"));
 		z = _buf[p] & 0xff;
 		switch (b) {
-		case 0: //address
+		case 0:
 			s.append(Code.lookup(z >>> 4));
 			s.append((Code.lookup(z & 0xf).toString().charAt(0) - 'A' + 1) & 0xff);
 			s.append(" ");
 			break;
-		case 1: //function
+		case 1:
 			Cmd func = Cmd.lookup(z & 0xf);
 			//s.append("House code: ");
 			//s.append(hex(z >>> 4));
@@ -235,51 +241,75 @@ public static void parse_status(int n)
 	log(INFO, s.toString());
 }
 
-public void cmd(Cmd func, Code house)
+public boolean cmd(Cmd func, Code house)
 {
 	if (func.need_addr()) {
 		log(ERR, "Command '" + func.label() + "' needs address");
-		return;
+		return false;
 	}
 	if (func.need_dim()) {
 		log(ERR, "Command '" + func.label() + "' needs dim level");
-		return;
+		return false;
 	}
-	cmd(func, house, null, 1);
+	return cmd(func, house, null, 1);
 }
 
-public void cmd(Cmd func, Code house, int unit)
+public boolean cmd(Cmd func, Code house, int unit)
 {
 	if (!func.need_addr())
 		log(WARN, "Command '" + func.label() + "' does not need an address");
 	if (func.need_dim()) {
 		log(ERR, "Command '" + func.label() + "' needs dim level");
-		return;
+		return false;
 	}
 	int[] units = {unit};
-	cmd(func, house, units, 1);
+	return cmd(func, house, units, 1);
 }
 
-public void cmd(Cmd func, Code house, int unit, int dim)
+public boolean cmd(Cmd func, Code house, int unit, int dim)
 {
 	if (!func.need_addr())
 		log(WARN, "Command '" + func.label() + "' does not need an address");
 	if (!func.need_dim())
 		log(WARN, "Command '" + func.label() + "' does not need dim level");
 	int[] units = {unit};
-	cmd(func, house, units, dim);
+	return cmd(func, house, units, dim);
 }
 
-public void cmd(Cmd func, Code house, int[] units, int dim)
+public boolean cmd(Command c)
+{
+	long t = time(c.cmdLabel());
+	int result = 0;
+	int house = c.houseCode();
+	int[] units = c.units();
+	if (units != null)
+		for (int i = 0; i < units.length; i++)
+			if ((result = address(house, units[i])) != 0)
+				break;
+	if (result == 0)
+		function(house, c.dim(), c.cmdCode());
+	time(t);
+	return result == 0;
+	
+}
+
+public boolean cmd(Cmd func, Code house, int[] units, int dim)
 {
 	long t = time(func.label());
+	int result = 0;
 	if (func.need_addr()) {
-		for (int i = 0; i < units.length; i++)
-			address(house.ordinal(), units[i]);
+		for (int i = 0; i < units.length; i++) {
+			result = address(house.ordinal(), units[i]);
+			if (result != 0)
+				break;
+		}
 	}
-	dim = (func.need_dim()) ? dim : 1;
-	function(house.ordinal(), dim, func.ordinal());
+	if (result == 0) {
+		dim = (func.need_dim()) ? dim : 1;
+		function(house.ordinal(), dim, func.ordinal());
+	}
 	time(t);
+	return result == 0;
 }
 
 private static final String pad(int n)
@@ -308,8 +338,7 @@ private void set_clock(Code house)
 	_sbuf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
 	_sbuf[6] = (byte)((house.ordinal() << 4) | clear);
 	send(_sbuf, 7);
-	int k = wait4data(800);
-	log(INFO, "Clock set response: " + hex(_buf, k));
+	log(INFO, "Clock set response: " + hex(_buf, listen(800)));
 }
 
 private static final String hex(int n)
@@ -400,25 +429,39 @@ private static final int d2 = 7; // 07	WS467 dimmer switch
 
 public static void main(String[] args)
 {
-	Comm comm = new Comm(args[0]);
+	Serial comm = new Serial(args[0]);
 	comm.setup();
 //	comm.list_ports();
-	int z = 20;
-	int[] units = {a1, a2};
+	int z = 100, k;
+	int[] units = {3};
+	Command on = new Command(Cmd.ON, HOUSE, units, 2);
+	Command all_off = new Command(Cmd.ALL_OFF, HOUSE, 2, 2);
+
 	do {
-		comm.wait4data(1200);
 		switch (_buf[0] & 0xff) {
+		//case 0x5b:
+		//	comm.listen(50);
+		//	break;
 		case 0x5a:
+			k = 0;
 			log(DEBUG, "Interface has data for us");
-			comm.send(0xc3);
-			parse_status(comm.wait4data(500));
+			while ((_buf[0] & 0xff) == 0x5a) {
+				comm.send(0xc3);
+				k = comm.listen(500);
+			}
+			parse_status(k);
 			break;
 		case 0xa5:
 			log(DEBUG, "Interface asks for clock");
 			comm.set_clock(HOUSE);
 		}
-		//comm.cmd(Cmd.STATUS_REQ, HOUSE, a1);
-		delay(1000);
+
+		if (!comm.cmd(on))
+			continue;
+		if (!comm.cmd(all_off)) {
+			continue;
+		}
+		comm.listen(1050);
 	} while (--z > 0);
 	comm.teardown();
 }

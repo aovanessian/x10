@@ -5,11 +5,11 @@ import com.fazecast.jSerialComm.*;
 public class Listener implements SerialPortDataListener
 {
 
-Comm comm;
+Serial comm;
 
-public Listener(Comm c)
+public Listener(Serial s)
 {
-	comm = c;
+	comm = s;
 }
 
 public int getListeningEvents()
