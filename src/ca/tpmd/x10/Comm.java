@@ -6,7 +6,7 @@ import java.util.Calendar;
 public final class Comm
 {
 
-private final static byte HOUSE = 'O';
+private final static Code HOUSE = Code.O;
 private final static int DELAY = 10;
 private final static char[] _hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 private final static byte[] _buf = new byte[64];
@@ -21,7 +21,7 @@ private static final int TIMING = 6;
 private static final int INFO = 5;
 private static final int WARN = 4;
 private static final int ERR = 3;
-private static int _level = DEBUG;
+private static int _level = INFO;
 
 public Comm(String name)
 {
@@ -91,12 +91,6 @@ private static byte device(int n)
 	return (byte)_codes[n - 1];
 }
 
-private static byte house(int n)
-{
-	int z = (n < 81) ? _codes[n - 65] : _codes[n - 97];
-	return (byte)(z << 4);
-}
-
 private static int checksum(byte[] buf, int n)
 {
 	int z = 0;
@@ -120,13 +114,8 @@ private int wait4data(int ms)
 		}
 		delay(DELAY);
 	} while (z-- > 0);
-	log(WARN, "\t\tTimed out waiting for data");
+	log(TIMING, "\t\tTimed out waiting for data");
 	return 0;
-}
-
-private void command(byte[] buf, int n)
-{
-	command(buf, n, 800);
 }
 
 private void command(byte[] buf, int n, int delay)
@@ -150,31 +139,31 @@ private void command(byte[] buf, int n, int delay)
 		log(DEBUG, "\tCommand successful");
 }
 
-private int send(int b)
+private void send(int b)
 {
 	byte[] buf = {(byte)(b & 0xff)};
-	return send(buf, 1);
+	send(buf, 1);
 }
 
-public int send(byte[] buf, int n)
+public void send(byte[] buf, int n)
 {
 	log(DEBUG, "\tSent " + hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
-	return _port.writeBytes(buf, n);
+	_port.writeBytes(buf, n);
 }
 
 public void address(int house, int unit)
 {
 	log(DEBUG, "\tAddressing " + device_string(house, unit));
 	_sbuf[0] = (byte)4;
-	_sbuf[1] = (byte)(house(house) | device(unit));
-	command(_sbuf, 2);
+	_sbuf[1] = (byte)(house << 4 | device(unit));
+	command(_sbuf, 2, 800);
 }
 
 public void function(int house, int dim, int command)
 {
 	log(DEBUG, "\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
-	_sbuf[1] = (byte)(house(house) | command);
+	_sbuf[1] = (byte)(house << 4 | command);
 	command(_sbuf, 2, 800 + dim * 200);
 }
 
@@ -214,9 +203,9 @@ public static void parse_status(int n)
 		z = _buf[p] & 0xff;
 		switch (b) {
 		case 0: //address
-			s.append("device ");
-			s.append(hex(z));
-			s.append(": ");
+			s.append(Code.lookup(z >>> 4));
+			s.append((Code.lookup(z & 0xf).toString().charAt(0) - 'A' + 1) & 0xff);
+			s.append(" ");
 			break;
 		case 1: //function
 			Cmd func = Cmd.lookup(z & 0xf);
@@ -246,7 +235,7 @@ public static void parse_status(int n)
 	log(INFO, s.toString());
 }
 
-public void cmd(Cmd func, int house)
+public void cmd(Cmd func, Code house)
 {
 	if (func.need_addr()) {
 		log(ERR, "Command '" + func.label() + "' needs address");
@@ -259,7 +248,7 @@ public void cmd(Cmd func, int house)
 	cmd(func, house, null, 1);
 }
 
-public void cmd(Cmd func, int house, int unit)
+public void cmd(Cmd func, Code house, int unit)
 {
 	if (!func.need_addr())
 		log(WARN, "Command '" + func.label() + "' does not need an address");
@@ -271,7 +260,7 @@ public void cmd(Cmd func, int house, int unit)
 	cmd(func, house, units, 1);
 }
 
-public void cmd(Cmd func, int house, int unit, int dim)
+public void cmd(Cmd func, Code house, int unit, int dim)
 {
 	if (!func.need_addr())
 		log(WARN, "Command '" + func.label() + "' does not need an address");
@@ -281,15 +270,15 @@ public void cmd(Cmd func, int house, int unit, int dim)
 	cmd(func, house, units, dim);
 }
 
-public void cmd(Cmd func, int house, int[] units, int dim)
+public void cmd(Cmd func, Code house, int[] units, int dim)
 {
 	long t = time(func.label());
 	if (func.need_addr()) {
 		for (int i = 0; i < units.length; i++)
-			address(house, units[i]);
+			address(house.ordinal(), units[i]);
 	}
 	dim = (func.need_dim()) ? dim : 1;
-	function(house, dim, func.ordinal());
+	function(house.ordinal(), dim, func.ordinal());
 	time(t);
 }
 
@@ -298,7 +287,7 @@ private static final String pad(int n)
 	return (n < 10) ? "0" + n : "" + n;
 }
 
-private void set_clock()
+private void set_clock(Code house)
 {
 	String[] weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 	Calendar calendar = Calendar.getInstance();
@@ -317,7 +306,7 @@ private void set_clock()
 	_sbuf[4] = (byte)(day & 0xff);		/* mantisa of julian date */
 	_sbuf[5] = (byte)((day >>> 15 ) << 7);	/* radix of julian date */
 	_sbuf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
-	_sbuf[6] = (byte)(house(HOUSE) | clear);
+	_sbuf[6] = (byte)((house.ordinal() << 4) | clear);
 	send(_sbuf, 7);
 	int k = wait4data(800);
 	log(INFO, "Clock set response: " + hex(_buf, k));
@@ -414,30 +403,23 @@ public static void main(String[] args)
 	Comm comm = new Comm(args[0]);
 	comm.setup();
 //	comm.list_ports();
-//	comm.set_clock();
-int k;
-int z = 20;
-int[] units = {a1, a2};
-Cmd c = Cmd.lookup(0xa);
-System.out.println(c);
-System.out.println(Cmd.ALL_OFF.ordinal());
-do {
-	comm.wait4data(1200);
-	switch (_buf[0] & 0xff) {
-	case 0x5a:
-		log(INFO, "Interface has data for us");
-		comm.send(0xc3);
-		k = comm.wait4data(500);
-		parse_status(k);
-		break;
-	case 0xa5:
-		log(INFO, "Interface asks for clock");
-		comm.set_clock();
-	}
-	comm.cmd(Cmd.HAIL_REQ, HOUSE, a1);
-} while (--z > 0);
-	//comm.cmd_status(HOUSE, a1);
-	//comm.cmd_status(HOUSE, a1);
+	int z = 20;
+	int[] units = {a1, a2};
+	do {
+		comm.wait4data(1200);
+		switch (_buf[0] & 0xff) {
+		case 0x5a:
+			log(DEBUG, "Interface has data for us");
+			comm.send(0xc3);
+			parse_status(comm.wait4data(500));
+			break;
+		case 0xa5:
+			log(DEBUG, "Interface asks for clock");
+			comm.set_clock(HOUSE);
+		}
+		//comm.cmd(Cmd.STATUS_REQ, HOUSE, a1);
+		delay(1000);
+	} while (--z > 0);
 	comm.teardown();
 }
 
