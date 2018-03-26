@@ -8,7 +8,6 @@ public final class Serial
 
 private final static Code HOUSE = Code.O;
 private final static int DELAY = 10;
-private final static char[] _hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 private final static byte[] _buf = new byte[64];
 private final static byte[] _sbuf = new byte[64];
 private final String _name;
@@ -16,13 +15,6 @@ private SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private volatile boolean _data_available = false;
 private volatile int _data_len = 0;
-private static final int DEBUG = 7;
-private static final int VERBOSE = 6;
-private static final int TIMING = 5;
-private static final int INFO = 4;
-private static final int WARN = 3;
-private static final int ERR = 2;
-private static int _level = INFO;
 
 public Serial(String name)
 {
@@ -33,13 +25,7 @@ public static final void list_ports()
 {
 	SerialPort[] ports = SerialPort.getCommPorts();
 	for (int i = 0; i < ports.length; i++)
-		log(INFO, port_settings(ports[i]));
-}
-
-public static final void log(int level, String msg)
-{
-	if (level <= _level)
-		System.out.println(msg);
+		X10.info(port_settings(ports[i]));
 }
 
 private static void delay(int ms)
@@ -57,7 +43,7 @@ public void readData()
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
 	_data_available = true;
 	_data_len = n;
-	log(DEBUG, "\tGot  " + hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+	X10.debug("\tGot  " + hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
 }
 
 public void setup()
@@ -67,7 +53,7 @@ public void setup()
 	_port.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
 	_port.addDataListener(new Listener(this));
 	_port.openPort();
-	log(DEBUG, port_settings(_port));
+	X10.debug(port_settings(_port));
 }
 
 public void teardown()
@@ -75,7 +61,7 @@ public void teardown()
 	if (_port == null)
 		return;
 	_port.closePort();
-	log(DEBUG, port_settings(_port));
+	X10.debug(port_settings(_port));
 	_port = null;
 }
 
@@ -104,18 +90,18 @@ private int listen(int ms)
 {
 	int z = (ms == 0) ? 5000 / DELAY : ms / DELAY;
 	int k = z;
-	log(TIMING, "\t\tlisten delay: " + ms + "ms");
+	X10.timing("\t\tlisten delay: " + ms + "ms");
 	do {
 		if (_data_available && _data_len > 0) {
 			_data_available = false;
 			int result = _data_len;
 			_data_len = 0;
-			log(TIMING, "\t\tWaited for " + DELAY * (k - z) + "ms");
+			X10.timing("\t\tWaited for " + DELAY * (k - z) + "ms");
 			return result;
 		}
 		delay(DELAY);
 	} while (z-- > 0);
-	log(TIMING, "\t\tTimed out waiting for data");
+	X10.timing("\t\tTimed out waiting for data");
 	return 0;
 }
 
@@ -127,11 +113,11 @@ private int command(byte[] buf, int n, int delay)
 		send(buf, n);
 		k = listen(100);
 		if (k == 0) {
-			log(VERBOSE, "!\tInterface did not respond, aborting command");
+			X10.verbose("!\tInterface did not respond, aborting command");
 			return 2;
 		}
 		if ((_buf[0] & 0xff) == 0x5a) {
-			log(VERBOSE, "!\tInterface wants to send data, aborting command");
+			X10.verbose("!\tInterface wants to send data, aborting command");
 			return 1;
 		}
 		z = checksum(_buf, k);
@@ -139,7 +125,7 @@ private int command(byte[] buf, int n, int delay)
 	send(0);
 	listen(delay);
 	if ((_buf[0] & 0xff) == 0x55) {
-		log(DEBUG, "\tCommand successful");
+		X10.debug("\tCommand successful");
 		return 0;
 	}
 	return 2;
@@ -153,13 +139,13 @@ private void send(int b)
 
 public void send(byte[] buf, int n)
 {
-	log(DEBUG, "\tSent " + hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
+	X10.debug("\tSent " + hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
 	_port.writeBytes(buf, n);
 }
 
 public int address(int house, int unit)
 {
-	log(DEBUG, "\tAddressing " + device_string(house, unit));
+	X10.debug("\tAddressing " + device_string(house, unit));
 	_sbuf[0] = (byte)4;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
 	return command(_sbuf, 2, 800);
@@ -167,7 +153,7 @@ public int address(int house, int unit)
 
 public int function(int house, int dim, int command)
 {
-	log(DEBUG, "\tFunction " + command + ", dim " + dim);
+	X10.debug("\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
 	return command(_sbuf, 2, 800 + dim * 200);
@@ -175,28 +161,28 @@ public int function(int house, int dim, int command)
 
 private static long time(String cmd)
 {
-	log(INFO, "Sending " + cmd + " command");
+	X10.info("Sending " + cmd + " command");
 	return System.currentTimeMillis();
 }
 
 private static void time(long t)
 {
-	log(TIMING, "Took " + (System.currentTimeMillis() - t) + "ms");
+	X10.timing("Took " + (System.currentTimeMillis() - t) + "ms");
 }
 
 public static void parse_status(int n)
 {
-	log(INFO, "Status data: " + hex(_buf, n));
+	X10.info("Status data: " + hex(_buf, n));
 	int k = (_buf[0] & 0xff) + 1;
 	if (n > 11) {
-		log(ERR, "Status too long (" + n + " bytes)");
+		X10.err("Status too long (" + n + " bytes)");
 		return;
 	}
 	if (n != k) {
-		log(ERR, "Truncated status: only " + n + " bytes out of " + k + " available");
+		X10.err("Truncated status: only " + n + " bytes out of " + k + " available");
 		return;
 	}
-	log(DEBUG, "Got " + k + " bytes to parse");
+	X10.debug("Got " + k + " bytes to parse");
 	int map = _buf[1] & 0xff;
 	int p = 2;
 	int b;
@@ -205,7 +191,7 @@ public static void parse_status(int n)
 	while (p < k) {
 		b = map & 1;
 		map >>>= 1;
-		log(DEBUG, "Byte at " + p + " is " + (b == 0 ? "address" : "function"));
+		X10.debug("Byte at " + p + " is " + (b == 0 ? "address" : "function"));
 		z = _buf[p] & 0xff;
 		switch (b) {
 		case 0:
@@ -238,17 +224,17 @@ public static void parse_status(int n)
 		}
 		p++;
 	}
-	log(INFO, s.toString());
+	X10.info(s.toString());
 }
 
 public boolean cmd(Cmd func, Code house)
 {
 	if (func.need_addr()) {
-		log(ERR, "Command '" + func.label() + "' needs address");
+		X10.err("Command '" + func.label() + "' needs address");
 		return false;
 	}
 	if (func.need_dim()) {
-		log(ERR, "Command '" + func.label() + "' needs dim level");
+		X10.err("Command '" + func.label() + "' needs dim level");
 		return false;
 	}
 	return cmd(func, house, null, 1);
@@ -257,9 +243,9 @@ public boolean cmd(Cmd func, Code house)
 public boolean cmd(Cmd func, Code house, int unit)
 {
 	if (!func.need_addr())
-		log(WARN, "Command '" + func.label() + "' does not need an address");
+		X10.warn("Command '" + func.label() + "' does not need an address");
 	if (func.need_dim()) {
-		log(ERR, "Command '" + func.label() + "' needs dim level");
+		X10.err("Command '" + func.label() + "' needs dim level");
 		return false;
 	}
 	int[] units = {unit};
@@ -269,9 +255,9 @@ public boolean cmd(Cmd func, Code house, int unit)
 public boolean cmd(Cmd func, Code house, int unit, int dim)
 {
 	if (!func.need_addr())
-		log(WARN, "Command '" + func.label() + "' does not need an address");
+		X10.warn("Command '" + func.label() + "' does not need an address");
 	if (!func.need_dim())
-		log(WARN, "Command '" + func.label() + "' does not need dim level");
+		X10.warn("Command '" + func.label() + "' does not need dim level");
 	int[] units = {unit};
 	return cmd(func, house, units, dim);
 }
@@ -326,7 +312,7 @@ private void set_clock(Code house)
 	int hour = calendar.get(Calendar.HOUR);
 	int minute = calendar.get(Calendar.MINUTE);
 	int second = calendar.get(Calendar.SECOND);
-	log(DEBUG, weekdays[wd] + ", " + day + " day or year " + pad(hour) + ":" + pad(minute) + ":" + pad(second));
+	X10.debug(weekdays[wd] + ", " + day + " day or year " + pad(hour) + ":" + pad(minute) + ":" + pad(second));
 	int clear = 0;//1;
 
 	_sbuf[0] = (byte)0x9b;			/* CM11A timer download code */
@@ -338,7 +324,7 @@ private void set_clock(Code house)
 	_sbuf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
 	_sbuf[6] = (byte)((house.ordinal() << 4) | clear);
 	send(_sbuf, 7);
-	log(INFO, "Clock set response: " + hex(_buf, listen(800)));
+	X10.info("Clock set response: " + hex(_buf, listen(800)));
 }
 
 private static final String hex(int n)
@@ -444,7 +430,7 @@ public static void main(String[] args)
 		//	break;
 		case 0x5a:
 			k = 0;
-			log(DEBUG, "Interface has data for us");
+			X10.debug("Interface has data for us");
 			while ((_buf[0] & 0xff) == 0x5a) {
 				comm.send(0xc3);
 				k = comm.listen(500);
@@ -452,7 +438,7 @@ public static void main(String[] args)
 			parse_status(k);
 			break;
 		case 0xa5:
-			log(DEBUG, "Interface asks for clock");
+			X10.debug("Interface asks for clock");
 			comm.set_clock(HOUSE);
 		}
 
