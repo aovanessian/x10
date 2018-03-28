@@ -22,7 +22,7 @@ public Command(Cmd c, Code house, int unit)
 
 public Command(Cmd c, Code house, int unit, int dim)
 {
-	if (unit < 0 || unit > 15)
+	if (unit < 1 || unit > 16)
 		throw new IllegalArgumentException("Unit id outside allowed range: " + unit);
 	if (dim < 0 || dim > 22)
 		throw new IllegalArgumentException("Dim level outside allowed range: " + dim);
@@ -51,7 +51,7 @@ public Command(Cmd c, Code house, int[] units, int dim)
 		if (units == null)
 			throw new IllegalArgumentException(c.label() + ": need address");
 		for (int i = 0; i < units.length; i++)
-			if (units[i] < 0 || units[i] > 15)
+			if (units[i] < 1 || units[i] > 16)
 				throw new IllegalArgumentException("Unit id outside allowed range: " + units[i]);
 	} else if (units != null) {
 		X10.info(c.label() + ": superfluous address");
