@@ -11,10 +11,6 @@ private final int _dim;
 public Command(Cmd c, Code house)
 {
 	this(c, house, null, 0);
-	if (c.need_addr())
-		throw new IllegalArgumentException(c.label() + ": need address");
-	if (c.need_dim())
-		throw new IllegalArgumentException(c.label() + ": need dim level");
 }
 
 public Command(Cmd c, Code house, int unit)
@@ -26,6 +22,10 @@ public Command(Cmd c, Code house, int unit)
 
 public Command(Cmd c, Code house, int unit, int dim)
 {
+	if (unit < 0 || unit > 15)
+		throw new IllegalArgumentException("Unit id outside allowed range: " + unit);
+	if (dim < 0 || dim > 22)
+		throw new IllegalArgumentException("Dim level outside allowed range: " + dim);
 	int[] units = {unit};
 	_command = c;
 	_house = house;
@@ -38,14 +38,31 @@ public Command(Cmd c, Code house, int unit, int dim)
 
 }
 
+public Command(Cmd c, Code house, int[] units)
+{
+	this(c, house, units, 0);
+	if (c.need_dim())
+		throw new IllegalArgumentException(c.label() + ": need dim level");
+}
+
 public Command(Cmd c, Code house, int[] units, int dim)
 {
+	if (c.need_addr()) {
+		if (units == null)
+			throw new IllegalArgumentException(c.label() + ": need address");
+		for (int i = 0; i < units.length; i++)
+			if (units[i] < 0 || units[i] > 15)
+				throw new IllegalArgumentException("Unit id outside allowed range: " + units[i]);
+	} else if (units != null) {
+		X10.info(c.label() + ": superfluous address");
+	}
+
+	if (dim < 0 || dim > 22)
+		throw new IllegalArgumentException("Dim level outside allowed range: " + dim);
 	_command = c;
 	_house = house;
 	_units = c.need_addr() ? units : null;
 	_dim = c.need_dim() ? dim : 1;
-	if (!c.need_addr() && units != null)
-		X10.info(c.label() + ": superfluous address");
 	if (!c.need_dim() && dim != 0)
 		X10.info(c.label() + ": superfluous dim level");
 }
@@ -73,6 +90,25 @@ public int[] units()
 public int dim()
 {
 	return _dim;
+}
+
+public String toString()
+{
+	StringBuilder s = new StringBuilder();
+	if (_units != null) {
+		for (int i = 0; i < _units.length; i++) {
+			s.append(_house);
+			s.append(_units[i]);
+			s.append(" ");
+		}
+	}
+	s.append(_command);
+	if (_command.need_dim()) {
+		s.append(" ");
+		s.append(_dim * 100 / 22);
+		s.append("%");
+	}
+	return s.toString();
 }
 
 }
