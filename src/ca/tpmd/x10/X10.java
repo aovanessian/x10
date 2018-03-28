@@ -12,36 +12,36 @@ private static final int INFO = 4;
 private static final int WARN = 3;
 private static final int ERR = 2;
 
-private static int _level = INFO;
+private static int _level = VERBOSE;
 
 public static final void debug(String s)
 {
-	log(DEBUG, s);
+	log(DEBUG, "DEBUG\t" + s);
 }
 
 public static final void verbose(String s)
 {
-	log(VERBOSE, s);
+	log(VERBOSE, "VERBOSE\t" + s);
 }
 
 public static final void timing(String s)
 {
-	log(TIMING, s);
+	log(TIMING, "TIMING\t" + s);
 }
 
 public static final void info(String s)
 {
-	log(INFO, s);
+	log(INFO, "INFO\t" + s);
 }
 
 public static final void warn(String s)
 {
-	log(WARN, s);
+	log(WARN, "WARNING\t" + s);
 }
 
 public static final void err(String s)
 {
-	log(ERR, s);
+	log(ERR, "ERROR\t" + s);
 }
 
 public static final void log(int l, String s)
@@ -75,9 +75,16 @@ public static final String hex(byte[] buf, int n)
 
 public static void main(String[] args)
 {
-	Serial comm = new Serial(args[0]);
+	Serial.list_ports();
+	Serial comm = Serial.create(args[0]);
 	comm.setup();
-	comm.event_loop();
+	Thread t = new Thread(comm);
+	t.start();
+	try {
+		t.join();
+	} catch (InterruptedException e) {
+		e.printStackTrace();
+	}
 	comm.teardown();
 }
 

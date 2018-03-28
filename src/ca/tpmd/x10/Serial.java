@@ -3,19 +3,27 @@ package ca.tpmd.x10;
 import com.fazecast.jSerialComm.SerialPort;
 import java.util.Calendar;
 
-public final class Serial
+public final class Serial implements Runnable
 {
 
 private final static Code HOUSE = Code.O;
-private final static int DELAY = 10;
+private final static int DELAY = 5;
 private final static byte[] _buf = new byte[64];
 private final static byte[] _sbuf = new byte[64];
 private final String _name;
-private SerialPort _port;
+private static SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private volatile int _data_len = 0;
+private static Serial _serial = null;
 
-public Serial(String name)
+public static Serial create(String name)
+{
+	if (_serial == null)
+		_serial = new Serial(name);
+	return _serial;
+}
+
+private Serial(String name)
 {
 	_name = name;
 }
@@ -86,19 +94,18 @@ private static int checksum(byte[] buf, int n)
 
 private int listen(int ms)
 {
-	int z = (ms == 0) ? 5000 / DELAY : ms / DELAY;
+	int z = ms / DELAY;
 	int k = z;
-	X10.timing("\t\tlisten delay: " + ms + "ms");
 	do {
 		if (_data_len > 0) {
 			int result = _data_len;
 			_data_len = 0;
-			X10.timing("\t\tWaited for " + DELAY * (k - z) + "ms");
+			X10.timing("\t\tListen delay: " + ms + "ms,\twaited for " + DELAY * (k - z) + "ms");
 			return result;
 		}
 		delay(DELAY);
 	} while (z-- > 0);
-	X10.timing("\t\tTimed out waiting for data");
+	X10.timing("\t\tListen delay: " + ms + "ms,\ttimed out");
 	return 0;
 }
 
@@ -107,15 +114,15 @@ private int command(byte[] buf, int n, int delay)
 	int check = checksum(buf, n);
 	int z = 0, k;
 	do {
+		if ((_buf[0] & 0xff) == 0x5a) {
+			X10.verbose("!\tInterface wants to send data, aborting command");
+			return 1;
+		}
 		send(buf, n);
 		k = listen(100);
 		if (k == 0) {
 			X10.verbose("!\tInterface did not respond, aborting command");
 			return 2;
-		}
-		if ((_buf[0] & 0xff) == 0x5a) {
-			X10.verbose("!\tInterface wants to send data, aborting command");
-			return 1;
 		}
 		z = checksum(_buf, k);
 	} while (z != check);
@@ -134,21 +141,21 @@ private void send(int b)
 	send(buf, 1);
 }
 
-public void send(byte[] buf, int n)
+private void send(byte[] buf, int n)
 {
 	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
 	_port.writeBytes(buf, n);
 }
 
-public int address(int house, int unit)
+private int address(int house, int unit)
 {
 	X10.debug("\tAddressing " + device_string(house, unit));
 	_sbuf[0] = (byte)4;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
-	return command(_sbuf, 2, 800);
+	return command(_sbuf, 2, 600);
 }
 
-public int function(int house, int dim, int command)
+private int function(int house, int dim, int command)
 {
 	X10.debug("\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
@@ -156,9 +163,8 @@ public int function(int house, int dim, int command)
 	return command(_sbuf, 2, 800 + dim * 200);
 }
 
-private static long time(String cmd)
+private static long time()
 {
-	X10.info("Sending " + cmd + " command");
 	return System.currentTimeMillis();
 }
 
@@ -167,7 +173,7 @@ private static void time(long t)
 	X10.timing("Took " + (System.currentTimeMillis() - t) + "ms");
 }
 
-public static void parse_status(int n)
+private void parse_status(int n)
 {
 	X10.info("Status data: " + X10.hex(_buf, n));
 	int k = (_buf[0] & 0xff) + 1;
@@ -221,9 +227,10 @@ public static void parse_status(int n)
 	X10.info(s.toString());
 }
 
-public boolean cmd(Command c)
+private boolean cmd(Command c)
 {
-	long t = time(c.cmdLabel());
+	long t = time();
+	X10.info(c.toString());
 	int result = 0;
 	int house = c.houseCode();
 	int[] units = c.units();
@@ -330,12 +337,16 @@ private static final int a2 = 3; // O3	RR466 appliance module 3 prong
 private static final int d1 = 5; // O5	HD465 dimmer module
 private static final int d2 = 7; // 07	WS467 dimmer switch
 
-public void event_loop()
+public void run()
 {
-	Command on = new Command(Cmd.ON, HOUSE, 2, 2);
-	Command all_off = new Command(Cmd.ALL_OFF, HOUSE, 2, 2);
-	int z = 100, k;
+	int[] units = {2, 4, 6};
+	Command on = new Command(Cmd.ON, Code.M, units);
+	Command br = new Command(Cmd.BRIGHT, Code.M, 5, 22);
+	Command all_off = new Command(Cmd.ALL_OFF, Code.M);
 
+	Command[] cmds = {on, br, all_off};
+	int z = 10, k;
+	int i = 0;
 	do {
 		switch (_buf[0] & 0xff) {
 		//case 0x5b:
@@ -354,14 +365,12 @@ public void event_loop()
 			X10.debug("Interface asks for clock");
 			set_clock(HOUSE);
 		}
-
-		if (!cmd(on))
-			continue;
-		if (!cmd(all_off)) {
-			continue;
-		}
-		listen(1050);
+		cmd(cmds[i++]);
+		i %= cmds.length;
+		delay(200);
+		//listen(1050);
 	} while (--z > 0);
+
 }
 
 }
