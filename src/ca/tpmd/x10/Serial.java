@@ -369,12 +369,14 @@ public void run()
 		command = getCommand();
 		if (command == null)
 			continue;
-		X10.info(command.toString());
+		X10.verbose(command.toString());
 		if (command.exit())
 			break;
 		if (!command.cmdSystem())
-			if (cmd(command))
+			if (cmd(command)) {
+				X10.info(command + " complete");
 				_commands.remove(0);
+			}
 	}
 	teardown();
 }
