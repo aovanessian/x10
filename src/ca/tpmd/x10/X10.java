@@ -12,7 +12,7 @@ private static final int INFO = 4;
 private static final int WARN = 3;
 private static final int ERR = 2;
 
-private static int _level = VERBOSE;
+private static int _level = INFO;
 
 public static final void debug(String s)
 {
@@ -75,12 +75,13 @@ public static final String hex(byte[] buf, int n)
 
 public static void main(String[] args)
 {
-	Serial.list_ports();
+	//Serial.list_ports();
 	Serial comm = Serial.create(args[0]);
 	Control ctrl = Control.create(comm);
-	new Thread(comm).start();
-	Thread t = new Thread(ctrl);
+
+	Thread t = new Thread(comm);
 	t.start();
+	new Thread(ctrl).start();
 	try {
 		t.join();
 	} catch (InterruptedException e) {

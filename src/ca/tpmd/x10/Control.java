@@ -1,6 +1,10 @@
 package ca.tpmd.x10;
 
 import java.util.ArrayList;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.io.IOException;
+
 
 public class Control implements Runnable
 {
@@ -174,22 +178,22 @@ private Cmd command(String s)
 
 public void run()
 {
-	String[] commands = {
-		" \t ",
-		" \tzz ",
-		" aoff -1",
-		"dim\to 3 3",
-		"all-off   b cde\t \t f xyz\tabc",
-		"bright 11 o 11 5",
-		"exit"
-	};
-	for (int i = 0; i < commands.length; i++) {
-		Command c = parse(commands[i]);
-		if (c == null)
-			continue;
-			X10.info(commands[i] + ": " + c.toString());
-	}
-
+	BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+	Command c;
+	String s;
+	do {
+		try {
+			s = reader.readLine();
+			if (s == null)
+				break;
+		} catch (IOException x) {
+			s = "";
+			x.printStackTrace();
+		}
+		c = parse(s);
+		if (c != null)
+			_serial.addCommand(c);
+	} while (_serial.active());
 }
 
 }

@@ -2,6 +2,7 @@ package ca.tpmd.x10;
 
 import com.fazecast.jSerialComm.SerialPort;
 import java.util.Calendar;
+import java.util.ArrayList;
 
 public final class Serial implements Runnable
 {
@@ -15,6 +16,12 @@ private static SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private volatile int _data_len = 0;
 private static Serial _serial = null;
+private static ArrayList<Command> _commands = new ArrayList<Command>();
+
+public boolean active()
+{
+	return _port != null;
+}
 
 public static Serial create(String name)
 {
@@ -231,7 +238,6 @@ private void parse_status(int n)
 private boolean cmd(Command c)
 {
 	long t = time();
-	X10.info(c.toString());
 	int result = 0;
 	int house = c.houseCode();
 	int[] units = c.units();
@@ -341,15 +347,12 @@ private static final int d2 = 7; // 07	WS467 dimmer switch
 public void run()
 {
 	setup();
-	int z = 10, k;
+	int k;
 	int i = 0;
 	Command command;
-	do {
-		listen(50);
+	for (;;) {
+		listen(5);
 		switch (_buf[0] & 0xff) {
-		//case 0x5b:
-		//	comm.listen(50);
-		//	break;
 		case 0x5a:
 			k = 0;
 			X10.debug("Interface has data for us");
@@ -366,20 +369,30 @@ public void run()
 		command = getCommand();
 		if (command == null)
 			continue;
+		X10.info(command.toString());
 		if (command.exit())
 			break;
 		if (!command.cmdSystem())
-			cmd(command);
-//		delay(200);
-	} while (--z > 0);
+			if (cmd(command))
+				_commands.remove(0);
+	}
 	teardown();
 }
 
-private static int _z = 5;
-
-private Command getCommand()
+private synchronized Command getCommand()
 {
-	return (_z-- == 0) ? new Command(Cmd.EXIT, null) : new Command(Cmd.ALL_OFF, Code.M);
+	Command cmd = _commands.isEmpty() ? null : _commands.get(0);
+	if (cmd == null)
+		try {
+			wait(1000);
+		} catch (InterruptedException x) {}
+	return cmd;
+}
+
+public synchronized void addCommand(Command cmd)
+{
+	_commands.add(cmd);
+	notify();
 }
 
 }

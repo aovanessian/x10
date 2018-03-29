@@ -111,8 +111,11 @@ public String toString()
 			s.append(_units[i]);
 			s.append(" ");
 		}
+	} else if (_house != null) {
+		s.append(_house);
+		s.append(" ");
 	}
-	s.append(_command);
+	s.append(_command.label());
 	if (_command.need_dim()) {
 		s.append(" ");
 		s.append(_dim * 100 / 22);
