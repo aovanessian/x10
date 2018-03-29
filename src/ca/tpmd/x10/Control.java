@@ -62,6 +62,10 @@ private Command parse(String s)
 		return null;
 	if (!command.need_addr())
 		return new Command(command, house);
+	if (tokens.size() == start) {
+		X10.warn("Need at least one unit for " + command);
+		return null;
+	}
 	int[] units = new int[tokens.size() - start];
 	int n, k = 0;
 	for (int i = start; i < tokens.size(); i++) {
@@ -190,10 +194,11 @@ public void run()
 			break;
 		}
 		c = parse(s);
-		if (c != null)
+		if (c != null) {
 			_serial.addCommand(c);
-		if (c.exit())
-			break;
+			if (c.exit())
+				break;
+		}
 	}
 }
 

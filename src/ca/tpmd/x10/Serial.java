@@ -28,6 +28,7 @@ public static Serial create(String name)
 private Serial(String name)
 {
 	_name = name;
+	setup();
 }
 
 public static final void list_ports()
@@ -52,6 +53,14 @@ public void readData()
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
 	_data_len = n;
 	X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+}
+
+public boolean test()
+{
+	_sbuf[0] = (byte)((1 << 3) | 6);
+        _sbuf[1] = (byte)(0xf);
+	send(_sbuf, 2);
+	return (listen(500) != 0);
 }
 
 private void setup()
@@ -341,7 +350,6 @@ private static final int d2 = 7; // 07	WS467 dimmer switch
 
 public void run()
 {
-	setup();
 	int k;
 	int i = 0;
 	Command command;

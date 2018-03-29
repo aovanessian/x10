@@ -82,11 +82,16 @@ public static void main(String[] args)
 	Thread t = new Thread(comm);
 	t.start();
 	new Thread(ctrl).start();
+	log(INFO, "X10 control");
+	if (!comm.test()) {
+		log(ERR, "Error, interface at " + args[0] + " does not respond.");
+		return;
+	}
+	log(INFO, "Interface at " + args[0] + " ready.\n");
 	try {
 		t.join();
-	} catch (InterruptedException e) {
-		e.printStackTrace();
-	}
+	} catch (InterruptedException e) {}
+	log(INFO, "\n... and we're done.");
 }
 
 }
