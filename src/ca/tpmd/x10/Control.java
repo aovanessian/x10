@@ -128,6 +128,7 @@ private Code house(String s)
 private Cmd command(String s)
 {
 	switch (s.toLowerCase()) {
+	case "ao":
 	case "aoff":
 	case "alloff":
 	case "all-off":
@@ -159,6 +160,7 @@ private Cmd command(String s)
 	case "all-lights-off":
 	case "all_lights_off":
 		return Cmd.LIGHTS_OFF;
+	case "st":
 	case "status":
 	case "status-request":
 	case "status_request":
@@ -179,7 +181,7 @@ public void run()
 	Scanner in = new Scanner(System.in);
 	Command c;
 	String s;
-	do {
+	for (;;) {
 		try {
 			s = in.nextLine();
 		} catch (NoSuchElementException n) {
@@ -187,12 +189,12 @@ public void run()
 		} catch (IllegalStateException x) {
 			break;
 		}
-		if (s == null)
-			break;
 		c = parse(s);
 		if (c != null)
 			_serial.addCommand(c);
-	} while (_serial.active());
+		if (c.exit())
+			break;
+	}
 }
 
 }

@@ -18,11 +18,6 @@ private volatile int _data_len = 0;
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
 
-public boolean active()
-{
-	return _port != null;
-}
-
 public static Serial create(String name)
 {
 	if (_serial == null)
