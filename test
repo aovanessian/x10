@@ -1,0 +1,5 @@
+on o 1 5
+off o 1
+dim 15 o 5
+aoff o 5
+exit
