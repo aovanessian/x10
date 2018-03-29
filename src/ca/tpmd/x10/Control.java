@@ -1,10 +1,8 @@
 package ca.tpmd.x10;
 
 import java.util.ArrayList;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.IOException;
-
+import java.util.Scanner;
+import java.util.NoSuchElementException;
 
 public class Control implements Runnable
 {
@@ -178,18 +176,19 @@ private Cmd command(String s)
 
 public void run()
 {
-	BufferedReader reader = new BufferedReader(new InputStreamReader(System.in));
+	Scanner in = new Scanner(System.in);
 	Command c;
 	String s;
 	do {
 		try {
-			s = reader.readLine();
-			if (s == null)
-				break;
-		} catch (IOException x) {
-			s = "";
-			x.printStackTrace();
+			s = in.nextLine();
+		} catch (NoSuchElementException n) {
+			continue;
+		} catch (IllegalStateException x) {
+			break;
 		}
+		if (s == null)
+			break;
 		c = parse(s);
 		if (c != null)
 			_serial.addCommand(c);
