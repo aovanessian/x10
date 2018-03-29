@@ -79,15 +79,15 @@ public static void main(String[] args)
 	Serial comm = Serial.create(args[0]);
 	Control ctrl = Control.create(comm);
 
-	Thread t = new Thread(comm);
-	t.start();
-	new Thread(ctrl).start();
 	log(INFO, "X10 control");
 	if (!comm.test()) {
 		log(ERR, "Error, interface at " + args[0] + " does not respond.");
-		return;
+		System.exit(1);
 	}
 	log(INFO, "Interface at " + args[0] + " ready.\n");
+	Thread t = new Thread(comm);
+	t.start();
+	new Thread(ctrl).start();
 	try {
 		t.join();
 	} catch (InterruptedException e) {}
