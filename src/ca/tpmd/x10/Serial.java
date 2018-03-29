@@ -52,7 +52,7 @@ public void readData()
 	X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
 }
 
-public void setup()
+private void setup()
 {
 	_port = SerialPort.getCommPort(_name);
 	_port.setComPortParameters(4800, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
@@ -62,13 +62,14 @@ public void setup()
 	X10.debug(port_settings(_port));
 }
 
-public void teardown()
+private void teardown()
 {
 	if (_port == null)
 		return;
 	_port.closePort();
 	X10.debug(port_settings(_port));
 	_port = null;
+	_serial = null;
 }
 
 private static String device_string(int house, int unit)
@@ -339,15 +340,12 @@ private static final int d2 = 7; // 07	WS467 dimmer switch
 
 public void run()
 {
-	int[] units = {2, 4, 6};
-	Command on = new Command(Cmd.ON, Code.M, units);
-	Command br = new Command(Cmd.BRIGHT, Code.M, 5, 22);
-	Command all_off = new Command(Cmd.ALL_OFF, Code.M);
-
-	Command[] cmds = {on, br, all_off};
+	setup();
 	int z = 10, k;
 	int i = 0;
+	Command command;
 	do {
+		listen(50);
 		switch (_buf[0] & 0xff) {
 		//case 0x5b:
 		//	comm.listen(50);
@@ -365,12 +363,23 @@ public void run()
 			X10.debug("Interface asks for clock");
 			set_clock(HOUSE);
 		}
-		cmd(cmds[i++]);
-		i %= cmds.length;
-		delay(200);
-		//listen(1050);
+		command = getCommand();
+		if (command == null)
+			continue;
+		if (command.exit())
+			break;
+		if (!command.cmdSystem())
+			cmd(command);
+//		delay(200);
 	} while (--z > 0);
+	teardown();
+}
 
+private static int _z = 5;
+
+private Command getCommand()
+{
+	return (_z-- == 0) ? new Command(Cmd.EXIT, null) : new Command(Cmd.ALL_OFF, Code.M);
 }
 
 }

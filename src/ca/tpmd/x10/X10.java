@@ -77,15 +77,15 @@ public static void main(String[] args)
 {
 	Serial.list_ports();
 	Serial comm = Serial.create(args[0]);
-	comm.setup();
-	Thread t = new Thread(comm);
+	Control ctrl = Control.create(comm);
+	new Thread(comm).start();
+	Thread t = new Thread(ctrl);
 	t.start();
 	try {
 		t.join();
 	} catch (InterruptedException e) {
 		e.printStackTrace();
 	}
-	comm.teardown();
 }
 
 }

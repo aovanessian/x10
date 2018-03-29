@@ -77,6 +77,16 @@ public int cmdCode()
 	return _command.ordinal();
 }
 
+public boolean cmdSystem()
+{
+	return _command.sys_cmd();
+}
+
+public boolean exit()
+{
+	return _command == Cmd.EXIT;
+}
+
 public int houseCode()
 {
 	return _house.ordinal();
