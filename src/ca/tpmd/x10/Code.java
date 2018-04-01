@@ -25,4 +25,9 @@ enum Code
 	{
 		return values[n];
 	}
+
+	static Code find(int n)
+	{
+		return Code.valueOf("" + (char)(n + 'A'));
+	}
 }

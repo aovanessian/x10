@@ -67,6 +67,11 @@ public Command(Cmd c, Code house, int[] units, int dim)
 		X10.info(c.label() + ": superfluous dim level");
 }
 
+public Cmd cmd()
+{
+	return _command;
+}
+
 public String cmdLabel()
 {
 	return _command.label();

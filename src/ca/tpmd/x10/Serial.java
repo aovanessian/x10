@@ -14,6 +14,7 @@ private final static byte[] _sbuf = new byte[64];
 private final String _name;
 private static SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
+private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 private volatile int _data_len = 0;
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
@@ -57,10 +58,14 @@ public void readData()
 
 public boolean test()
 {
+	if (!_port.isOpen()) {
+		X10.log(0, "Could not open port");
+		return false;
+	}
 	_sbuf[0] = (byte)((1 << 3) | 6);
         _sbuf[1] = (byte)(0xf);
 	send(_sbuf, 2);
-	return (listen(500) != 0);
+	return (listen(1500) != 0);
 }
 
 private void setup()
@@ -98,9 +103,14 @@ private static byte device(int n)
 
 private static int checksum(byte[] buf, int n)
 {
+	return checksum(buf, 0, n);
+}
+
+private static int checksum(byte[] buf, int s, int n)
+{
 	int z = 0;
-	for (int i = 0; i < n; i++)
-		z+= buf[i];
+	for (int i = s; i < n; i++)
+		z += buf[i];
 	return z & 0xff;
 }
 
@@ -123,7 +133,12 @@ private int listen(int ms)
 
 private int command(byte[] buf, int n, int delay)
 {
-	int check = checksum(buf, n);
+	return command(buf, 0, n, delay);
+}
+
+private int command(byte[] buf, int s, int n, int delay)
+{
+	int check = checksum(buf, s, n);
 	int z = 0, k;
 	do {
 		if ((_buf[0] & 0xff) == 0x5a) {
@@ -155,7 +170,12 @@ private void send(int b)
 
 private void send(byte[] buf, int n)
 {
-	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, n) + ")");
+	send(buf, 0, n);
+}
+
+private void send(byte[] buf, int s, int n)
+{
+	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
 	_port.writeBytes(buf, n);
 }
 
@@ -239,6 +259,60 @@ private void parse_status(int n)
 	X10.info(s.toString());
 }
 
+private void parse_state(int n)
+{
+	if (n != 14) {
+		X10.err("Expect 14 bytes state response, got " + n + "bytes");
+		return;
+	}
+	StringBuilder s = new StringBuilder();
+	int z;
+	s.append("State: ");
+	s.append(X10.hex(_buf, 14));
+	s.append("\n\tFirmware revision: ");
+	s.append(_buf[7] & 0xf);
+	s.append("\n\tMinutes on battery power: ");
+	z = (_buf[0] << 8 | _buf[1]) & 0xffff;
+	s.append(z == 0xffff ? "unknown, needs clear" : z);
+	z = _buf[5] & 0xff | _buf[6] & 0x80;
+	Calendar calendar = Calendar.getInstance();
+        calendar.set(Calendar.DAY_OF_YEAR, z);
+	s.append("\n\tDay of year: ");
+	s.append(z);
+	s.append(", ");
+	z = _buf[6] & 0x7f;
+	int i = 0;
+	while ((z >>>= 1) != 0)
+		i++;
+	s.append(_weekdays[i]);
+	s.append("\n\t");
+	s.append(calendar.getTime());
+	s.append("\n\tTime: ");
+	s.append((_buf[4] << 1) + (_buf[3] / 60));
+	s.append(":");
+	s.append(pad(_buf[3] % 60));
+	s.append(":");
+	s.append(pad(_buf[2]));
+	s.append("\n\tMonitored house code: ");
+	String house = Code.lookup(_buf[7] >>> 4).toString();
+	s.append(house);
+	s.append("\n\t");
+	for (i = 0; i < 16; i++) {
+		s.append(house);
+		s.append(i + 1);
+		s.append("\t");
+	}
+	int off = (_buf[11] << 8 | _buf[10]) & 0xffff;
+	int dim = (_buf[13] << 8 | _buf[12]) & 0xffff;
+	s.append("\n\t");
+	for (i = 0; i < 16; i++) {
+		int shift = 1 << Code.find(i).ordinal();
+		s.append((dim & shift) == 0 ? ((off & shift) == 0 ? "off" : "on") : "dimmed");
+		s.append("\t");
+	}
+	X10.info(s.toString());
+}
+
 private boolean cmd(Command c)
 {
 	long t = time();
@@ -263,26 +337,28 @@ private static final String pad(int n)
 
 private void set_clock(Code house)
 {
-	String[] weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 	Calendar calendar = Calendar.getInstance();
-	int wd = calendar.get(Calendar.DAY_OF_WEEK);
+	int wd = calendar.get(Calendar.DAY_OF_WEEK) - 1;
 	int day = calendar.get(Calendar.DAY_OF_YEAR);
-	int hour = calendar.get(Calendar.HOUR);
+	int hour = calendar.get(Calendar.HOUR_OF_DAY);
 	int minute = calendar.get(Calendar.MINUTE);
 	int second = calendar.get(Calendar.SECOND);
-	X10.debug(weekdays[wd] + ", " + day + " day or year " + pad(hour) + ":" + pad(minute) + ":" + pad(second));
+	X10.debug(_weekdays[wd] + ", day of year: " + day + ", time " + hour + ":" + pad(minute) + ":" + pad(second));
 	int clear = 0;//1;
 
-	_sbuf[0] = (byte)0x9b;			/* CM11A timer download code */
+	_sbuf[0] = (byte)0x9b;
 	_sbuf[1] = (byte)second;
-	_sbuf[2] = (byte)(minute + ((hour & 1) * 60))  ;  /* minutes 0 - 119 */
-	_sbuf[3] = (byte)(hour >>> 1);		/* hour / 2         0 - 11 */
-	_sbuf[4] = (byte)(day & 0xff);		/* mantisa of julian date */
-	_sbuf[5] = (byte)((day >>> 15 ) << 7);	/* radix of julian date */
-	_sbuf[5] |= (byte)(1 << wd);		/* bits 0-6 = single bit mask day of week ( smtwtfs ) */
+	_sbuf[2] = (byte)(minute + ((hour & 1) * 60));
+	_sbuf[3] = (byte)(hour >>> 1);
+	_sbuf[4] = (byte)(day & 0xff);
+	_sbuf[5] = (byte)((day >>> 15 ) << 7);
+	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house.ordinal() << 4) | clear);
-	send(_sbuf, 7);
-	X10.info("Clock set response: " + X10.hex(_buf, listen(800)));
+	if (command(_sbuf, 1, 7, 800) != 0) {
+		X10.verbose("!\tInterface did not respond, aborting clock setting.");
+		return;
+	}
+	X10.info("\tClock set");
 }
 
 private static final String port_settings(SerialPort port)
@@ -375,11 +451,20 @@ public void run()
 		X10.verbose(command.toString());
 		if (command.exit())
 			break;
-		if (!command.cmdSystem())
+		if (!command.cmdSystem()) {
 			if (cmd(command)) {
 				X10.info(command + " complete");
 				_commands.remove(0);
 			}
+			continue;
+		}
+		switch (command.cmd()) {
+		case SYSTEM_STATE:
+			_commands.remove(0);
+			send(0x8b);
+			k = listen(100);
+			parse_state(k);
+		}
 	}
 	teardown();
 }
