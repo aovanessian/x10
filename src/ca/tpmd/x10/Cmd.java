@@ -10,14 +10,14 @@ OFF			(true,	"off"),
 DIM			(true,	"dim"),
 BRIGHT			(true,	"brighten"),
 LIGHTS_OFF		(false,	"all lights off"),
-EXT_CODE		(true,	"extended code"),
-HAIL_REQ		(true,	"hail request"),
-HAIL_ACK		(true,	"hail acknowledge"),
-PRESET_DIM_1		(true,	"pre-set dim 1"),
-PRESET_DIM_2		(true,	"pre-set dim 2"),
-EXT_DATA_TFR		(true,	"extended data transfer"),
-STATUS_ON		(true,	"status on"),
-STATUS_OFF		(true,	"status off"),
+EXT_CODE_1		(true,	"extended code"),
+HAIL_REQ		(false,	"hail request"),
+HAIL_ACK		(false,	"hail acknowledge"),
+EXT_CODE_3		(true,	"extended code 3"),
+UNUSED			(false,	"unused"),
+EXT_CODE_2		(true,	"extended code 2"),
+STATUS_ON		(true,	"module on"),
+STATUS_OFF		(true,	"module off"),
 STATUS_REQ		(true,	"status request"),
 SYSTEM_STATE		(false,	"system state"),
 EXIT			(false,	"exit");
@@ -39,7 +39,7 @@ static Cmd lookup(int n)
 
 boolean sys_cmd()
 {
-	return this == SYSTEM_STATE || this == EXIT;
+	return this.ordinal() > 15;
 }
 
 boolean need_addr()
