@@ -20,6 +20,9 @@ STATUS_ON		(true,	"module on"),
 STATUS_OFF		(true,	"module off"),
 STATUS_REQ		(true,	"status request"),
 SYSTEM_STATE		(false,	"system state"),
+RING_ENABLE		(false, "enable serial ring"),
+RING_DISABLE		(false, "disable serial ring"),
+CLOCK_SET		(false, "set interface clock"),
 EXIT			(false,	"exit");
 
 private final boolean addr;

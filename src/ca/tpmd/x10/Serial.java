@@ -245,7 +245,7 @@ private void parse_status(int n)
 				s.append((_buf[++p] & 0xff) * 100 / 210);
 				s.append("%");
 				break;
-			case EXT_CODE:
+			case EXT_CODE_2:
 				s.append("data: ");
 				s.append(X10.hex(_buf[++p]));
 				s.append(", command: ");
@@ -259,11 +259,11 @@ private void parse_status(int n)
 	X10.info(s.toString());
 }
 
-private void parse_state(int n)
+private boolean parse_state(int n)
 {
 	if (n != 14) {
-		X10.err("Expect 14 bytes state response, got " + n + "bytes");
-		return;
+		X10.err("Expect 14 bytes state response, got " + n + " bytes");
+		return false;
 	}
 	StringBuilder s = new StringBuilder();
 	int z;
@@ -294,7 +294,7 @@ private void parse_state(int n)
 	s.append(":");
 	s.append(pad(_buf[2]));
 	s.append("\n\tMonitored house code: ");
-	String house = Code.lookup(_buf[7] >>> 4).toString();
+	String house = Code.lookup((_buf[7] >>> 4) & 0xf).toString();
 	s.append(house);
 	s.append("\n\t");
 	for (i = 0; i < 16; i++) {
@@ -311,6 +311,7 @@ private void parse_state(int n)
 		s.append("\t");
 	}
 	X10.info(s.toString());
+	return true;
 }
 
 private boolean cmd(Command c)
@@ -335,7 +336,29 @@ private static final String pad(int n)
 	return (n < 10) ? "0" + n : "" + n;
 }
 
-private void set_clock(Code house)
+private boolean sys_cmd(Command c)
+{
+	switch (c.cmd()) {
+	case SYSTEM_STATE:
+		send(0x8b);
+		return parse_state(listen(100));
+	case RING_DISABLE:
+		return sys_cmd(0xdb);
+	case RING_ENABLE:
+		return sys_cmd(0xeb);
+	case CLOCK_SET:
+		return set_clock(c.houseCode(), 0);
+	}
+	return false;
+}
+
+private boolean sys_cmd(int cmd)
+{
+	_sbuf[0] = (byte)cmd;
+	return command(_sbuf, 1, 100) == 0;
+}
+
+private boolean set_clock(int house, int clear)
 {
 	Calendar calendar = Calendar.getInstance();
 	int wd = calendar.get(Calendar.DAY_OF_WEEK) - 1;
@@ -344,7 +367,6 @@ private void set_clock(Code house)
 	int minute = calendar.get(Calendar.MINUTE);
 	int second = calendar.get(Calendar.SECOND);
 	X10.debug(_weekdays[wd] + ", day of year: " + day + ", time " + hour + ":" + pad(minute) + ":" + pad(second));
-	int clear = 0;//1;
 
 	_sbuf[0] = (byte)0x9b;
 	_sbuf[1] = (byte)second;
@@ -353,12 +375,13 @@ private void set_clock(Code house)
 	_sbuf[4] = (byte)(day & 0xff);
 	_sbuf[5] = (byte)((day >>> 15 ) << 7);
 	_sbuf[5] |= (byte)(1 << wd);
-	_sbuf[6] = (byte)((house.ordinal() << 4) | clear);
-	if (command(_sbuf, 1, 7, 800) != 0) {
+	_sbuf[6] = (byte)((house << 4) | clear);
+	if (command(_sbuf, 1, 7, 200) != 0) {
 		X10.verbose("!\tInterface did not respond, aborting clock setting.");
-		return;
+		return false;
 	}
-	X10.info("\tClock set");
+	X10.info("Clock set");
+	return true;
 }
 
 private static final String port_settings(SerialPort port)
@@ -443,7 +466,7 @@ public void run()
 			break;
 		case 0xa5:
 			X10.debug("Interface asks for clock");
-			set_clock(HOUSE);
+			set_clock(HOUSE.ordinal(), 3);
 		}
 		command = getCommand();
 		if (command == null)
@@ -458,13 +481,11 @@ public void run()
 			}
 			continue;
 		}
-		switch (command.cmd()) {
-		case SYSTEM_STATE:
-			_commands.remove(0);
-			send(0x8b);
-			k = listen(100);
-			parse_state(k);
-		}
+		if (sys_cmd(command))
+			X10.info(command + " complete");
+		else
+			X10.warn(command + " unsuccessful");
+		_commands.remove(0);
 	}
 	teardown();
 }

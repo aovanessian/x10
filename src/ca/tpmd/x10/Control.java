@@ -38,7 +38,11 @@ private Command parse(String s)
 	switch (command) {
 	case EXIT:
 	case SYSTEM_STATE:
+	case RING_ENABLE:
+	case RING_DISABLE:
 		return new Command(command, null);
+	case HAIL_REQ:
+		return new Command(command, Code.A);
 	}
 	if (tokens.size() < 2) {
 		X10.warn("Not enough parameters: " + s);
@@ -168,11 +172,19 @@ private Cmd command(String s)
 	case "all-lights-off":
 	case "all_lights_off":
 		return Cmd.LIGHTS_OFF;
+	case "hail":
+		return Cmd.HAIL_REQ;
 	case "st":
 	case "status":
 	case "status-request":
 	case "status_request":
 		return Cmd.STATUS_REQ;
+	case "er":
+		return Cmd.RING_ENABLE;
+	case "dr":
+		return Cmd.RING_DISABLE;
+	case "clock":
+		return Cmd.CLOCK_SET;
 	case "sys":
 	case "system":
 	case "state":
