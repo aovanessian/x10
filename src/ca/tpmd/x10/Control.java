@@ -9,6 +9,7 @@ public class Control implements Runnable
 
 private static Serial _serial;
 private static Control _control = null;
+private Command _previous = null;
 
 public static Control create(Serial s)
 {
@@ -26,16 +27,19 @@ private Command parse(String s)
 {
 	ArrayList<String> tokens = tokenize(s);
 	if (tokens.size() == 0) {
-		X10.warn("Empty command");
-		return null;
+		X10.verbose("Empty command");
+		return _previous;
 	}
 	Cmd command = command(tokens.get(0));
 	if (command == null) {
 		X10.warn("Not a valid command: " + tokens.get(0));
 		return null;
 	}
-	if (command == Cmd.EXIT)
+	switch (command) {
+	case EXIT:
+	case SYSTEM_STATE:
 		return new Command(command, null);
+	}
 	if (tokens.size() < 2) {
 		X10.warn("Not enough parameters: " + s);
 		return null;
@@ -173,8 +177,9 @@ private Cmd command(String s)
 	case "system":
 	case "state":
 		return Cmd.SYSTEM_STATE;
-	case "exit":
+	case "q":
 	case "quit":
+	case "exit":
 		return Cmd.EXIT;
 	}
 	return null;
@@ -198,6 +203,7 @@ public void run()
 			_serial.addCommand(c);
 			if (c.exit())
 				break;
+			_previous = c;
 		}
 	}
 }
