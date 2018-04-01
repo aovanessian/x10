@@ -62,6 +62,8 @@ public static final String hex(int n)
 
 public static final String hex(byte[] buf, int n)
 {
+	if (n <= 0)
+		return "";
         int c;
         StringBuilder result = new StringBuilder(n * 5);
         for (int i = 0; i < n; i++) {
@@ -77,16 +79,15 @@ public static void main(String[] args)
 {
 	//Serial.list_ports();
 	Serial comm = Serial.create(args[0]);
-	Control ctrl = Control.create(comm);
-
 	log(INFO, "X10 control");
 	if (!comm.test()) {
-		log(ERR, "Error, interface at " + args[0] + " does not respond.");
+		log(ERR, "Interface at " + args[0] + " does not respond, exiting...");
 		System.exit(1);
 	}
 	log(INFO, "Interface at " + args[0] + " ready.\n");
 	Thread t = new Thread(comm);
 	t.start();
+	Control ctrl = Control.create(comm);
 	new Thread(ctrl).start();
 	try {
 		t.join();
