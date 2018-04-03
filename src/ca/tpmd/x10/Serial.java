@@ -48,7 +48,7 @@ public static final void list_ports()
 private static void delay(int ms)
 {
 	try {
-		Thread.sleep(ms);
+		Thread.sleep(ms, 500000);
 	} catch (Exception e) {
 		e.printStackTrace();
 	}
@@ -56,20 +56,16 @@ private static void delay(int ms)
 
 public synchronized void readData()
 {
-	int n = _port.bytesAvailable();
-	int p;
-	int k = 0;
-	do {
-		k++;
-		p = n;
-		delay(6);
-		n = _port.bytesAvailable();
-	} while (p < n);
-	X10.timing("Got all bytes in " + (k * 6) + "ms");
-	k = _port.readBytes(_buf, _port.bytesAvailable());
-	_data_len = k;
 	notify();
-	X10.debug("\tGot  " + X10.hex(_buf, k) + " (checksum: " + checksum(_buf, k) + ")");
+	delay(2); // wait 2.5ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.4ms
+	int n = _port.bytesAvailable();
+	if (n > 1) { // yep, it's longer than the usual checksum or 0x55
+		delay(26); // just enough time to receive 12 more bytes of 14 byte status transmission (which seems to be the longest one)
+		n = _port.bytesAvailable();
+	}
+	X10.timing("Got " + n + " bytes in " + ((n > 1) ? "29ms" : "2.5ms"));
+	_data_len = _port.readBytes(_buf, n);//_port.bytesAvailable());
+	X10.debug("\tGot  " + X10.hex(_buf, _data_len) + " (checksum: " + checksum(_buf, _data_len) + ")");
 }
 
 public boolean test()
@@ -180,13 +176,11 @@ private void send(byte[] buf, int n)
 	send(buf, 0, n);
 }
 
-private synchronized void send(byte[] buf, int s, int n)
+private void send(byte[] buf, int s, int n)
 {
 	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
 	_port.writeBytes(buf, n);
-	try {
-		wait(5000);
-	} catch (InterruptedException x) {}
+	sleep(5000);
 }
 
 private int address(int house, int unit)
@@ -212,7 +206,7 @@ private static long time()
 
 private static void time(long t)
 {
-	X10.timing("Took " + (System.currentTimeMillis() - t) + "ms");
+	X10.info("Took " + (System.currentTimeMillis() - t) + "ms");
 }
 
 private void parse_status(int n)
@@ -467,11 +461,13 @@ public void run()
 		case 0x5a:
 			k = 0;
 			X10.debug("Interface has data for us");
+			t = time();
 			while ((_buf[0] & 0xff) == 0x5a) {
 				send(0xc3);
 				k = listen();
 			}
 			parse_status(k);
+			time(t);
 			break;
 		case 0xa5:
 			X10.debug("Interface asks for clock");
@@ -503,12 +499,10 @@ public void run()
 	teardown();
 }
 
-private synchronized Command getCommand()
+private Command getCommand()
 {
 	if (_commands.isEmpty())
-		try {
-			wait();
-		} catch (InterruptedException x) {}
+		sleep(0);
 	return _commands.isEmpty() ? null : _commands.get(0);
 }
 
@@ -516,6 +510,20 @@ public synchronized void addCommand(Command cmd)
 {
 	_commands.add(cmd);
 	notify();
+}
+
+private synchronized void sleep(int timeout)
+{
+
+	try {
+		if (timeout == 0) {
+			wait();
+			return;
+		}
+		long z = System.currentTimeMillis();
+		wait(timeout);
+		X10.timing("Slept for " + (System.currentTimeMillis() - z) + "ms");
+	} catch (InterruptedException x) {}
 }
 
 }
