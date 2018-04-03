@@ -8,7 +8,6 @@ public final class Serial implements Runnable
 {
 
 private final static Code HOUSE = Code.O;
-private final static int DELAY = 5;
 private final static byte[] _buf = new byte[64];
 private final static byte[] _sbuf = new byte[64];
 private final String _name;
@@ -57,14 +56,14 @@ private static void delay(int ms)
 public synchronized void readData()
 {
 	notify();
-	delay(2); // wait 2.5ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.4ms
+	delay(2); // wait 2.5ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.1ms
 	int n = _port.bytesAvailable();
 	if (n > 1) { // yep, it's longer than the usual checksum or 0x55
-		delay(26); // just enough time to receive 12 more bytes of 14 byte status transmission (which seems to be the longest one)
+		delay(26); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
 		n = _port.bytesAvailable();
 	}
 	X10.timing("Got " + n + " bytes in " + ((n > 1) ? "29ms" : "2.5ms"));
-	_data_len = _port.readBytes(_buf, n);//_port.bytesAvailable());
+	_data_len = _port.readBytes(_buf, n);
 	X10.debug("\tGot  " + X10.hex(_buf, _data_len) + " (checksum: " + checksum(_buf, _data_len) + ")");
 }
 
@@ -212,11 +211,11 @@ private static void time(long t)
 private void parse_status(int n)
 {
 	X10.info("Status data: " + X10.hex(_buf, n));
-	int k = (_buf[0] & 0xff) + 1;
 	if (n > 11) {
 		X10.err("Status too long (" + n + " bytes)");
 		return;
 	}
+	int k = (_buf[0] & 0xff) + 1;
 	if (n != k) {
 		X10.err("Truncated status: " + n + " out of " + k + " bytes available");
 		return;
@@ -229,36 +228,35 @@ private void parse_status(int n)
 	StringBuilder s = new StringBuilder();
 	while (p < k) {
 		b = map & 1;
-		map >>>= 1;
 		X10.debug("Byte at " + p + " is " + (b == 0 ? "address" : "function"));
-		z = _buf[p] & 0xff;
-		switch (b) {
-		case 0:
+		z = _buf[p++] & 0xff;
+		map >>>= 1;
+		if (b == 0) {
 			s.append(Code.lookup(z >>> 4));
 			s.append((Code.lookup(z & 0xf).toString().charAt(0) - 'A' + 1) & 0xff);
 			s.append(" ");
-			break;
-		case 1:
-			Cmd func = Cmd.lookup(z & 0xf);
-			s.append(func.label());
-			switch (func) {
-			case DIM:
-				s.append("m");
-			case BRIGHT:
-				s.append("ed by ");
-				s.append((_buf[++p] & 0xff) * 100 / 210);
-				s.append("%");
-				break;
-			case EXT_CODE_2:
-				s.append("data: ");
-				s.append(X10.hex(_buf[++p]));
-				s.append(", command: ");
-				s.append(X10.hex(_buf[++p]));
-				break;
-			}
-			s.append("; ");
+			continue;
 		}
-		p++;
+		Cmd func = Cmd.lookup(z & 0xf);
+		s.append(func.label());
+		switch (func) {
+		case DIM:
+			s.append("m");
+		case BRIGHT:
+			s.append("ed by ");
+			s.append((_buf[p++] & 0xff) * 100 / 210);
+			s.append("%");
+			map >>>= 1;
+			break;
+		case EXT_CODE_1:
+			s.append(" data: ");
+			s.append(X10.hex(_buf[p++]));
+			s.append(", command: ");
+			s.append(X10.hex(_buf[p++]));
+			map >>>= 2;
+			break;
+		}
+		s.append("; ");
 	}
 	X10.info(s.toString());
 }
@@ -266,7 +264,7 @@ private void parse_status(int n)
 private boolean parse_state(int n)
 {
 	if (n != 14) {
-		X10.err("Expect 14 bytes state response, got " + n + " bytes");
+		X10.err("Truncated state: " + n + " out of 14 bytes available");
 		return false;
 	}
 	StringBuilder s = new StringBuilder();
@@ -514,7 +512,6 @@ public synchronized void addCommand(Command cmd)
 
 private synchronized void sleep(int timeout)
 {
-
 	try {
 		if (timeout == 0) {
 			wait();
