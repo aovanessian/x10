@@ -19,6 +19,12 @@ private volatile int _data_len = 0;
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
 
+private static final int CMD_STATE = 0x8b;
+private static final int CMD_CLOCK = 0x9b;
+private static final int CMD_RI_DISABLE = 0xdb;
+private static final int CMD_RI_ENABLE = 0xeb;
+private static final int CMD_EEPROM_DL = 0xfb;
+
 public static Serial create(String name)
 {
 	if (_serial == null)
@@ -48,12 +54,22 @@ private static void delay(int ms)
 	}
 }
 
-public void readData()
+public synchronized void readData()
 {
-	delay(50);
-	int n = _port.readBytes(_buf, _port.bytesAvailable());
-	_data_len = n;
-	X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+	int n = _port.bytesAvailable();
+	int p;
+	int k = 0;
+	do {
+		k++;
+		p = n;
+		delay(6);
+		n = _port.bytesAvailable();
+	} while (p < n);
+	X10.timing("Got all bytes in " + (k * 6) + "ms");
+	k = _port.readBytes(_buf, _port.bytesAvailable());
+	_data_len = k;
+	notify();
+	X10.debug("\tGot  " + X10.hex(_buf, k) + " (checksum: " + checksum(_buf, k) + ")");
 }
 
 public boolean test()
@@ -65,7 +81,7 @@ public boolean test()
 	_sbuf[0] = (byte)((1 << 3) | 6);
         _sbuf[1] = (byte)(0xf);
 	send(_sbuf, 2);
-	return (listen(1500) != 0);
+	return (listen() != 0);
 }
 
 private void setup()
@@ -114,29 +130,21 @@ private static int checksum(byte[] buf, int s, int n)
 	return z & 0xff;
 }
 
-private int listen(int ms)
+private int listen()
 {
-	int z = ms / DELAY;
-	int k = z;
-	do {
-		if (_data_len > 0) {
-			int result = _data_len;
-			_data_len = 0;
-			X10.timing("\t\tListen delay: " + ms + "ms,\twaited for " + DELAY * (k - z) + "ms");
-			return result;
-		}
-		delay(DELAY);
-	} while (z-- > 0);
-	X10.timing("\t\tListen delay: " + ms + "ms,\ttimed out");
-	return 0;
+	if (_data_len == 0)
+		return 0;
+	int result = _data_len;
+	_data_len = 0;
+	return result;
 }
 
-private int command(byte[] buf, int n, int delay)
+private int command(byte[] buf, int n)
 {
-	return command(buf, 0, n, delay);
+	return command(buf, 0, n);
 }
 
-private int command(byte[] buf, int s, int n, int delay)
+private int command(byte[] buf, int s, int n)
 {
 	int check = checksum(buf, s, n);
 	int z = 0, k;
@@ -146,7 +154,7 @@ private int command(byte[] buf, int s, int n, int delay)
 			return 1;
 		}
 		send(buf, n);
-		k = listen(100);
+		k = listen();
 		if (k == 0) {
 			X10.verbose("!\tInterface did not respond, aborting command");
 			return 2;
@@ -154,8 +162,7 @@ private int command(byte[] buf, int s, int n, int delay)
 		z = checksum(_buf, k);
 	} while (z != check);
 	send(0);
-	listen(delay);
-	if ((_buf[0] & 0xff) == 0x55) {
+	if (listen() == 1 && (_buf[0] & 0xff) == 0x55) {
 		X10.debug("\tCommand successful");
 		return 0;
 	}
@@ -173,18 +180,21 @@ private void send(byte[] buf, int n)
 	send(buf, 0, n);
 }
 
-private void send(byte[] buf, int s, int n)
+private synchronized void send(byte[] buf, int s, int n)
 {
 	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
 	_port.writeBytes(buf, n);
+	try {
+		wait(5000);
+	} catch (InterruptedException x) {}
 }
 
 private int address(int house, int unit)
 {
 	X10.debug("\tAddressing " + device_string(house, unit));
-	_sbuf[0] = (byte)4;
+	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
-	return command(_sbuf, 2, 600);
+	return command(_sbuf, 2);
 }
 
 private int function(int house, int dim, int command)
@@ -192,7 +202,7 @@ private int function(int house, int dim, int command)
 	X10.debug("\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
-	return command(_sbuf, 2, 800 + dim * 200);
+	return command(_sbuf, 2);
 }
 
 private static long time()
@@ -214,7 +224,7 @@ private void parse_status(int n)
 		return;
 	}
 	if (n != k) {
-		X10.err("Truncated status: only " + n + " bytes out of " + k + " available");
+		X10.err("Truncated status: " + n + " out of " + k + " bytes available");
 		return;
 	}
 	X10.debug("Got " + k + " bytes to parse");
@@ -316,7 +326,6 @@ private boolean parse_state(int n)
 
 private boolean cmd(Command c)
 {
-	long t = time();
 	int result = 0;
 	int house = c.houseCode();
 	int[] units = c.units();
@@ -325,8 +334,7 @@ private boolean cmd(Command c)
 			if ((result = address(house, units[i])) != 0)
 				break;
 	if (result == 0)
-		function(house, c.dim(), c.cmdCode());
-	time(t);
+		result = function(house, c.dim(), c.cmdCode());
 	return result == 0;
 	
 }
@@ -340,22 +348,23 @@ private boolean sys_cmd(Command c)
 {
 	switch (c.cmd()) {
 	case SYSTEM_STATE:
-		send(0x8b);
-		return parse_state(listen(100));
+		send(CMD_STATE);
+		return parse_state(listen());
 	case RING_DISABLE:
-		return sys_cmd(0xdb);
+		return sys_cmd(CMD_RI_DISABLE);
 	case RING_ENABLE:
-		return sys_cmd(0xeb);
+		return sys_cmd(CMD_RI_ENABLE);
 	case CLOCK_SET:
 		return set_clock(c.houseCode(), 0);
 	}
+	X10.warn("Command " + c.cmd() + " not implemented");
 	return false;
 }
 
 private boolean sys_cmd(int cmd)
 {
 	_sbuf[0] = (byte)cmd;
-	return command(_sbuf, 1, 100) == 0;
+	return command(_sbuf, 1) == 0;
 }
 
 private boolean set_clock(int house, int clear)
@@ -368,7 +377,7 @@ private boolean set_clock(int house, int clear)
 	int second = calendar.get(Calendar.SECOND);
 	X10.debug(_weekdays[wd] + ", day of year: " + day + ", time " + hour + ":" + pad(minute) + ":" + pad(second));
 
-	_sbuf[0] = (byte)0x9b;
+	_sbuf[0] = (byte)CMD_CLOCK;
 	_sbuf[1] = (byte)second;
 	_sbuf[2] = (byte)(minute + ((hour & 1) * 60));
 	_sbuf[3] = (byte)(hour >>> 1);
@@ -376,7 +385,7 @@ private boolean set_clock(int house, int clear)
 	_sbuf[5] = (byte)((day >>> 15 ) << 7);
 	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house << 4) | clear);
-	if (command(_sbuf, 1, 7, 200) != 0) {
+	if (command(_sbuf, 1, 7) != 0) {
 		X10.verbose("!\tInterface did not respond, aborting clock setting.");
 		return false;
 	}
@@ -442,7 +451,7 @@ private static final String parity(int p)
 	return "unknown";
 }
 
-private static final int a1 = 1; // O1	HD501 rf receiver + appliance mmodule 2 prong
+private static final int a1 = 1; // O1	HD501 rf receiver + appliance module 2 prong
 private static final int a2 = 3; // O3	RR466 appliance module 3 prong
 private static final int d1 = 5; // O5	HD465 dimmer module
 private static final int d2 = 7; // 07	WS467 dimmer switch
@@ -451,16 +460,16 @@ public void run()
 {
 	int k;
 	int i = 0;
+	long t;
 	Command command;
 	for (;;) {
-		listen(5);
 		switch (_buf[0] & 0xff) {
 		case 0x5a:
 			k = 0;
 			X10.debug("Interface has data for us");
 			while ((_buf[0] & 0xff) == 0x5a) {
 				send(0xc3);
-				k = listen(500);
+				k = listen();
 			}
 			parse_status(k);
 			break;
@@ -475,16 +484,20 @@ public void run()
 		if (command.exit())
 			break;
 		if (!command.cmdSystem()) {
+			t = time();
 			if (cmd(command)) {
 				X10.info(command + " complete");
 				_commands.remove(0);
 			}
+			time(t);
 			continue;
 		}
+		t = time();
 		if (sys_cmd(command))
 			X10.info(command + " complete");
 		else
 			X10.warn(command + " unsuccessful");
+		time(t);
 		_commands.remove(0);
 	}
 	teardown();
@@ -492,12 +505,11 @@ public void run()
 
 private synchronized Command getCommand()
 {
-	Command cmd = _commands.isEmpty() ? null : _commands.get(0);
-	if (cmd == null)
+	if (_commands.isEmpty())
 		try {
-			wait(1000);
+			wait();
 		} catch (InterruptedException x) {}
-	return cmd;
+	return _commands.isEmpty() ? null : _commands.get(0);
 }
 
 public synchronized void addCommand(Command cmd)
