@@ -42,42 +42,41 @@ private Command parse(String s)
 	case RING_DISABLE:
 		return new Command(command, null);
 	case HAIL_REQ:
-		return new Command(command, Code.A);
+		return new Command(command, Code.M);
 	}
 	if (tokens.size() < 2) {
 		X10.warn("Not enough parameters: " + s);
 		return null;
 	}
 	int dim = 0;
-	int start = 1;
+	int token = 1;
 	Code house;
 	if (command.need_dim()) {
 		if (tokens.size() < 4) {
 			X10.warn("Not enough parameters for " + command + ": " + s);
 			return null;
 		}
-		dim = number(tokens.get(start));
+		dim = number(tokens.get(token++));
 		if (dim == -1)
 			return null;
 		if (dim < 0 || dim > 22) {
 			X10.warn(command + " level outside of allowed range [0..22]: " + dim);
 			return null;
 		}
-		start++;
 	}
-	house = house(tokens.get(start++).toUpperCase());
+	house = house(tokens.get(token++).toUpperCase());
 	if (house == null)
 		return null;
 	if (!command.need_addr())
 		return new Command(command, house);
-	if (tokens.size() == start) {
+	if (tokens.size() == token) {
 		X10.warn("Need at least one unit for " + command);
 		return null;
 	}
-	int[] units = new int[tokens.size() - start];
+	int[] units = new int[tokens.size() - token];
 	int n, k = 0;
-	for (int i = start; i < tokens.size(); i++) {
-		n = number(tokens.get(i));
+	while (token < tokens.size()) {
+		n = number(tokens.get(token++));
 		if (n == -1)
 			return null;
 		if (n < 1 || n > 16) {
