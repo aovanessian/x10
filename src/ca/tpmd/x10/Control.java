@@ -3,24 +3,27 @@ package ca.tpmd.x10;
 import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.NoSuchElementException;
+import java.io.InputStream;
 
 public class Control implements Runnable
 {
 
 private static Serial _serial;
 private static Control _control = null;
+private static InputStream _in;
 private Command _previous = null;
 
-public static Control create(Serial s)
+public static Control create(Serial s, InputStream in)
 {
 	if (_control == null)
-		_control = new Control(s);
+		_control = new Control(s, in);
 	return _control;
 }
 
-private Control(Serial s)
+private Control(Serial s, InputStream in)
 {
 	_serial = s;
+	_in = in;
 }
 
 private Command parse(String s)
@@ -112,14 +115,12 @@ private ArrayList<String> tokenize(String s)
 
 private int number(String s)
 {
-	int n;
 	try {
-		n = Integer.parseInt(s);
+		return Integer.parseInt(s);
 	} catch (NumberFormatException x) {
-		n = -1;
 		X10.warn("Not a number: " + s);
+		return -1;
 	}
-	return n;
 }
 
 private Code house(String s)
@@ -198,7 +199,7 @@ private Cmd command(String s)
 
 public void run()
 {
-	Scanner in = new Scanner(System.in);
+	Scanner in = new Scanner(_in);
 	Command c;
 	String s;
 	for (;;) {
@@ -210,12 +211,12 @@ public void run()
 			break;
 		}
 		c = parse(s);
-		if (c != null) {
-			_serial.addCommand(c);
-			if (c.exit())
-				break;
-			_previous = c;
-		}
+		if (c == null)
+			continue;
+		_serial.addCommand(c);
+		if (c.exit())
+			break;
+		_previous = c;
 	}
 }
 

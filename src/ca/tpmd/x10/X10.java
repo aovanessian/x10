@@ -87,7 +87,7 @@ public static void main(String[] args)
 	log(INFO, "Interface at " + args[0] + " ready.\n");
 	Thread t = new Thread(comm);
 	t.start();
-	Control ctrl = Control.create(comm);
+	Control ctrl = Control.create(comm, System.in);
 	new Thread(ctrl).start();
 	try {
 		t.join();
