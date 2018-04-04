@@ -48,6 +48,9 @@ throws ServletException, IOException
 	String c = req.getParameter("c");
 	if (c != null)
 		send(c);
+	res.setHeader( "Pragma", "no-cache" );
+	res.setHeader( "Cache-Control", "no-cache" );
+	res.setDateHeader( "Expires", 0 );
 	RequestDispatcher rd = req.getRequestDispatcher("/html/index.html");
 	rd.forward(req, res);
 	/*
@@ -67,11 +70,12 @@ public void destroy()
 
 private void send(String s)
 {
+	X10.info("sending " + s);
 	byte[] b = s.getBytes();
 	try {
 		_out.write(b, 0, b.length);
 		_out.write('\n');
-		//_out.flush();
+		_out.flush();
 	} catch (IOException x) {}
 }
 
