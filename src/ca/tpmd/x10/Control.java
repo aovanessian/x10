@@ -218,6 +218,7 @@ public void run()
 			break;
 		_previous = c;
 	}
+	X10.info("shutting down user interface");
 }
 
 }

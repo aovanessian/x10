@@ -3,9 +3,11 @@ package ca.tpmd.x10.http;
 import ca.tpmd.x10.*;
 
 import javax.servlet.ServletException;
+import javax.servlet.RequestDispatcher;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
+
 import java.io.PrintWriter;
 import java.io.IOException;
 import java.io.PipedInputStream;
@@ -16,6 +18,7 @@ public final class Rest extends HttpServlet
 
 private String message;
 private PipedOutputStream _out = null;
+private Thread _serial;
 
 public void init() throws ServletException
 {
@@ -29,11 +32,11 @@ public void init() throws ServletException
 	X10.info("X10 control");
 	if (!comm.test()) {
 		X10.err("Interface at " + port + " does not respond, exiting...");
-		System.exit(1);
+		throw new ServletException("Interface at " + port + " does not respond, exiting...");
 	}
 	X10.info("Interface at " + port + " ready.\n");
-	Thread t = new Thread(comm);
-	t.start();
+	_serial = new Thread(comm);
+	_serial.start();
 	Control ctrl = Control.create(comm, in);
 	new Thread(ctrl).start();
 }
@@ -41,19 +44,24 @@ public void init() throws ServletException
 public void doGet(HttpServletRequest req, HttpServletResponse res)
 throws ServletException, IOException
 {
-	res.setContentType("text/html");
-	//send("ao o");
-	//send("st o 1");
+	//res.setContentType("text/html");
+	String c = req.getParameter("c");
+	if (c != null)
+		send(c);
+	RequestDispatcher rd = req.getRequestDispatcher("/html/index.html");
+	rd.forward(req, res);
+	/*
 	PrintWriter out = res.getWriter();
 	out.println(req.getParameter("c"));
 	out.println("<h1>" + message + "</h1>");
+	*/
 }
 
 public void destroy()
 {
 	send("exit");
 	try {
-		Thread.sleep(3000);
+		_serial.join();
 	} catch (InterruptedException ex) {}
 }
 

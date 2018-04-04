@@ -494,6 +494,7 @@ public void run()
 		time(t);
 		_commands.remove(0);
 	}
+	X10.info("shutting down serial interface");
 	teardown();
 }
 
