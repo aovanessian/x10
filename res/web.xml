@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<web-app xmlns="http://java.sun.com/xml/ns/j2ee"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/javaee http://java.sun.com/xml/ns/javaee/web-app_2_5.xsd"
+	version="2.5">
+
+	<servlet>
+		<!-- Identification -->
+		<servlet-name>x10</servlet-name>
+		<servlet-class>ca.tpmd.x10.http.Rest</servlet-class>
+		<description>X10 control</description>
+
+		<!-- This servlet has two parameters -->
+		<init-param>
+			<param-name>port</param-name>
+			<param-value>true</param-value>
+		</init-param>
+		<init-param>
+			<param-name>loglevel</param-name>
+			<param-value>8</param-value>
+		</init-param>
+
+		<load-on-startup>5</load-on-startup>
+	</servlet>
+
+	<servlet-mapping>
+		<servlet-name>x10</servlet-name>
+		<url-pattern>/x10</url-pattern>
+	</servlet-mapping>
+
+</web-app>
