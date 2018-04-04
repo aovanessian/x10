@@ -1,3 +1,2 @@
 #!/bin/bash
-cd bin
-java -classpath .:../lib/jSerialComm-1.3.11.jar ca.tpmd.x10.X10 /dev/ttyUSB0
+java -jar bin/x10.jar /dev/ttyUSB0
