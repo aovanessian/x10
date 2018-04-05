@@ -17,6 +17,8 @@ private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wedne
 private volatile int _data_len = 0;
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
+private static boolean _delay = true;
+private static final int DELAY = 5000;
 
 private static final int CMD_STATE = 0x8b;
 private static final int CMD_CLOCK = 0x9b;
@@ -47,7 +49,7 @@ public static final void list_ports()
 private static void delay(int ms)
 {
 	try {
-		Thread.sleep(ms, 500000);
+		Thread.sleep(ms);
 	} catch (Exception e) {
 		e.printStackTrace();
 	}
@@ -56,14 +58,13 @@ private static void delay(int ms)
 public synchronized void readData()
 {
 	notify();
-	delay(2); // wait 2.5ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.1ms
-	int n = _port.bytesAvailable();
-	if (n > 1) { // yep, it's longer than the usual checksum or 0x55
-		delay(26); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
-		n = _port.bytesAvailable();
+	if (_delay) {
+		delay(3); // wait 3ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.1ms
+		if (_port.bytesAvailable() > 1) // yep, it's more than one
+			delay(27); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
 	}
-	X10.timing("Got " + n + " bytes in " + ((n > 1) ? "29ms" : "2.5ms"));
-	_data_len = _port.readBytes(_buf, n);
+	_delay = true;
+	_data_len = _port.readBytes(_buf, _port.bytesAvailable());
 	X10.debug("\tGot  " + X10.hex(_buf, _data_len) + " (checksum: " + checksum(_buf, _data_len) + ")");
 }
 
@@ -73,10 +74,8 @@ public boolean test()
 		X10.log(0, "Could not open port");
 		return false;
 	}
-	_sbuf[0] = (byte)((1 << 3) | 6);
-        _sbuf[1] = (byte)(0xf);
-	send(_sbuf, 2);
-	return (listen() != 0);
+	send(CMD_STATE);
+	return (listen() == 14);
 }
 
 private void setup()
@@ -145,17 +144,19 @@ private int command(byte[] buf, int s, int n)
 	int z = 0, k;
 	do {
 		if ((_buf[0] & 0xff) == 0x5a) {
-			X10.verbose("!\tInterface wants to send data, aborting command");
+			X10.info("Interface wants to send data, aborting command");
 			return 1;
 		}
+		_delay = false;
 		send(buf, n);
 		k = listen();
 		if (k == 0) {
-			X10.verbose("!\tInterface did not respond, aborting command");
+			X10.warn("Interface did not respond within " + DELAY + "ms, aborting command");
 			return 2;
 		}
 		z = checksum(_buf, k);
 	} while (z != check);
+	_delay = false;
 	send(0);
 	if (listen() == 1 && (_buf[0] & 0xff) == 0x55) {
 		X10.debug("\tCommand successful");
@@ -179,7 +180,7 @@ private void send(byte[] buf, int s, int n)
 {
 	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
 	_port.writeBytes(buf, n);
-	sleep(5000);
+	sleep(DELAY);
 }
 
 private int address(int house, int unit)
