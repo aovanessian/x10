@@ -78,6 +78,10 @@ public static final String hex(byte[] buf, int n)
 public static void main(String[] args)
 {
 	//Serial.list_ports();
+	if (args.length == 0) {
+		log(ERR, "Please specify serial port to use.");
+		System.exit(1);
+	}
 	Serial comm = Serial.create(args[0]);
 	log(INFO, "X10 control");
 	if (!comm.test()) {

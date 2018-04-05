@@ -44,8 +44,6 @@ private Command parse(String s)
 	case RING_ENABLE:
 	case RING_DISABLE:
 		return new Command(command, null);
-	case HAIL_REQ:
-		return new Command(command, Code.M);
 	}
 	if (tokens.size() < 2) {
 		X10.warn("Not enough parameters: " + s);

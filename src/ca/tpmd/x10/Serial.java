@@ -205,6 +205,7 @@ private static long time()
 
 private static void time(long t)
 {
+	//X10.timing("Took " + (System.currentTimeMillis() - t) + "ms");
 	X10.info("Took " + (System.currentTimeMillis() - t) + "ms");
 }
 
