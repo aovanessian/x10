@@ -248,7 +248,9 @@ private void parse_status(int n)
 			s.append(X10.hex(_buf[p++]));
 			s.append(", command: ");
 			s.append(X10.hex(_buf[p++]));
-			map >>>= 2;
+			s.append(", unit: ");
+			s.append(X10.hex(_buf[p++]));
+			map >>>= 3;
 			break;
 		}
 		s.append("; ");
@@ -294,19 +296,23 @@ private boolean parse_state(int n)
 	String house = Code.lookup((_buf[7] >>> 4) & 0xf).toString();
 	s.append(house);
 	s.append("\n\t");
-	for (i = 0; i < 16; i++) {
-		s.append(house);
-		s.append(i + 1);
-		s.append("\t");
-	}
+	int addr = (_buf[9] << 8 | _buf[8] & 0xff) & 0xffff;
 	int off = (_buf[11] << 8 | _buf[10] & 0xff) & 0xffff;
 	int dim = (_buf[13] << 8 | _buf[12] & 0xff) & 0xffff;
-	s.append("\n\t");
+	StringBuilder a = new StringBuilder("\n");
+	StringBuilder b = new StringBuilder("\n");
+	int mask;
 	for (i = 0; i < 16; i++) {
-		int shift = 1 << Code.find(i).ordinal();
-		s.append((dim & shift) == 0 ? ((off & shift) == 0 ? "off" : "on") : "dimmed");
-		s.append("\t");
+		mask = 1 << Code.find(i).ordinal();
+		s.append((addr & mask) != 0 ? "[" : "");
+		s.append(house);
+		s.append(i + 1);
+		s.append((addr & mask) != 0 ? "]\t" : "\t");
+		a.append((off & mask) != 0 ? "\ton" : "\toff");
+		b.append((dim & mask) != 0 ? "\tdimmed" : "\t");
 	}
+	s.append(a);
+	s.append(b);
 	X10.info(s.toString());
 	return true;
 }
