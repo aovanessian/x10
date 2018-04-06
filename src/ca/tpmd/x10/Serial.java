@@ -207,12 +207,12 @@ private void parse_status(int n)
 {
 	X10.info("Status data: " + X10.hex(_buf, n));
 	if (n > 11) {
-		X10.err("Status too long (" + n + " bytes)");
+		X10.warn("Status too long (" + n + " bytes)");
 		return;
 	}
 	int k = (_buf[0] & 0xff) + 1;
 	if (n != k) {
-		X10.err("Truncated status: " + n + " out of " + k + " bytes available");
+		X10.warn("Truncated status: " + n + " out of " + k + " bytes available");
 		return;
 	}
 	X10.debug("Got " + k + " bytes to parse");
@@ -259,7 +259,7 @@ private void parse_status(int n)
 private boolean parse_state(int n)
 {
 	if (n != 14) {
-		X10.err("Truncated state: " + n + " out of 14 bytes available");
+		X10.warn("Truncated state: " + n + " out of 14 bytes available");
 		return false;
 	}
 	StringBuilder s = new StringBuilder();
@@ -445,21 +445,18 @@ private static final int d2 = 7; // 07	WS467 dimmer switch
 
 public void run()
 {
-	int k;
 	int i = 0;
 	long t;
 	Command command;
 	for (;;) {
+		listen(false);
 		switch (_buf[0] & 0xff) {
 		case 0x5a:
-			k = 0;
+		case 0x5b:
 			X10.debug("Interface has data for us");
 			t = time();
-			while ((_buf[0] & 0xff) == 0x5a) {
-				send(0xc3);
-				k = listen(true);
-			}
-			parse_status(k);
+			send(0xc3);
+			parse_status(listen(true));
 			time(t);
 			break;
 		case 0xa5:
@@ -502,8 +499,8 @@ private Command getCommand()
 
 public synchronized void addCommand(Command cmd)
 {
-	_commands.add(cmd);
 	notify();
+	_commands.add(cmd);
 }
 
 private synchronized void sleep(int timeout)
