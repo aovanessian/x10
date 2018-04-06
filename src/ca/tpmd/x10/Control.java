@@ -3,6 +3,7 @@ package ca.tpmd.x10;
 import java.util.ArrayList;
 import java.util.Scanner;
 import java.util.NoSuchElementException;
+import java.util.Locale;
 import java.io.InputStream;
 
 public class Control implements Runnable
@@ -65,7 +66,7 @@ private Command parse(String s)
 			return null;
 		}
 	}
-	house = house(tokens.get(token++).toUpperCase());
+	house = house(tokens.get(token++).toUpperCase(Locale.US));
 	if (house == null)
 		return null;
 	if (!command.need_addr())
@@ -137,7 +138,7 @@ private Code house(String s)
 
 private Cmd command(String s)
 {
-	switch (s.toLowerCase()) {
+	switch (s.toLowerCase(Locale.US)) {
 	case "ao":
 	case "aoff":
 	case "alloff":
@@ -197,12 +198,14 @@ private Cmd command(String s)
 
 public void run()
 {
-	Scanner in = new Scanner(_in);
+	Scanner in = new Scanner(_in, "ASCII");
 	Command c;
 	String s;
 	for (;;) {
 		try {
 			s = in.nextLine();
+			if (s == null)
+				s = "exit";
 		} catch (NoSuchElementException n) {
 			continue;
 		} catch (IllegalStateException x) {

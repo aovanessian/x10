@@ -14,7 +14,6 @@ private final String _name;
 private static SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
-private volatile int _data_len = 0;
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
 private static boolean _delay = true;
@@ -58,14 +57,6 @@ private static void delay(int ms)
 public synchronized void readData()
 {
 	notify();
-	if (_delay) {
-		delay(3); // wait 3ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.1ms
-		if (_port.bytesAvailable() > 1) // yep, it's more than one
-			delay(27); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
-	}
-	_delay = true;
-	_data_len = _port.readBytes(_buf, _port.bytesAvailable());
-	X10.debug("\tGot  " + X10.hex(_buf, _data_len) + " (checksum: " + checksum(_buf, _data_len) + ")");
 }
 
 public boolean test()
@@ -75,7 +66,7 @@ public boolean test()
 		return false;
 	}
 	send(CMD_STATE);
-	return (listen() == 14);
+	return (listen() > 0);
 }
 
 private void setup()
@@ -126,11 +117,17 @@ private static int checksum(byte[] buf, int s, int n)
 
 private int listen()
 {
-	if (_data_len == 0)
+	if (_delay) {
+		delay(3); // wait 3ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.1ms
+		if (_port.bytesAvailable() > 1) // yep, it's more than one
+			delay(27); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
+	}
+	_delay = true;
+	int n = _port.readBytes(_buf, _port.bytesAvailable());
+	if (n == 0)
 		return 0;
-	int result = _data_len;
-	_data_len = 0;
-	return result;
+	X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+	return n;
 }
 
 private int command(byte[] buf, int n)
@@ -276,7 +273,7 @@ private boolean parse_state(int n)
 	s.append("\n\tFirmware revision: ");
 	s.append(_buf[7] & 0xf);
 	s.append("\n\tMinutes on battery power: ");
-	z = (_buf[0] << 8 | _buf[1]) & 0xffff;
+	z = (_buf[0] << 8 | _buf[1] & 0xff) & 0xffff;
 	s.append(z == 0xffff ? "unknown, needs clear" : z);
 	z = _buf[5] & 0xff | _buf[6] & 0x80;
 	Calendar calendar = Calendar.getInstance();
@@ -306,8 +303,8 @@ private boolean parse_state(int n)
 		s.append(i + 1);
 		s.append("\t");
 	}
-	int off = (_buf[11] << 8 | _buf[10]) & 0xffff;
-	int dim = (_buf[13] << 8 | _buf[12]) & 0xffff;
+	int off = (_buf[11] << 8 | _buf[10] & 0xff) & 0xffff;
+	int dim = (_buf[13] << 8 | _buf[12] & 0xff) & 0xffff;
 	s.append("\n\t");
 	for (i = 0; i < 16; i++) {
 		int shift = 1 << Code.find(i).ordinal();
@@ -374,7 +371,7 @@ private boolean set_clock(int house, int clear)
 	_sbuf[0] = (byte)CMD_CLOCK;
 	_sbuf[1] = (byte)second;
 	_sbuf[2] = (byte)(minute + ((hour & 1) * 60));
-	_sbuf[3] = (byte)(hour >>> 1);
+	_sbuf[3] = (byte)(hour >> 1);
 	_sbuf[4] = (byte)(day & 0xff);
 	_sbuf[5] = (byte)((day >>> 15 ) << 7);
 	_sbuf[5] |= (byte)(1 << wd);
