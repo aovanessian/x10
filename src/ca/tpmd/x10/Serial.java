@@ -16,7 +16,7 @@ private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7
 private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
-private static final int DELAY = 5000;
+private static final int DELAY = 20;
 
 private static final int CMD_STATE = 0x8b;
 private static final int CMD_CLOCK = 0x9b;
@@ -64,7 +64,7 @@ public boolean test()
 		X10.log(0, "Could not open port");
 		return false;
 	}
-	send(CMD_STATE);
+	send(CMD_STATE, 1200);
 	return (listen(false) > 0);
 }
 
@@ -127,7 +127,7 @@ private int listen(boolean delay)
 	return n;
 }
 
-private int command(int s, int n)
+private int command(int s, int n, int d)
 {
 	int check = checksum(_sbuf, s, n);
 	int z = 0, k;
@@ -136,7 +136,7 @@ private int command(int s, int n)
 			X10.info("Interface wants to send data, aborting command");
 			return 1;
 		}
-		send(0, n);
+		send(0, n, DELAY);
 		k = listen(false);
 		if (k == 0) {
 			X10.warn("Interface did not respond within " + DELAY + "ms, aborting command");
@@ -144,7 +144,7 @@ private int command(int s, int n)
 		}
 		z = checksum(_buf, k);
 	} while (z != check);
-	send(0);
+	send(0, d);
 	listen(false);
 	if ((_buf[0] & 0xff) != 0x55)
 		return 2;
@@ -152,27 +152,26 @@ private int command(int s, int n)
 	return 0;
 }
 
-private void send(int b)
+private void send(int b, int d)
 {
 	_sbuf[0] = (byte)(b & 0xff);
-	send(0, 1);
+	send(0, 1, d);
 }
 
-private void send(int s, int n)
+private void send(int s, int n, int d)
 {
 	_port.writeBytes(_sbuf, n);
+	long a = time() + d;
 	X10.debug("\tSent " + X10.hex(_sbuf, n) + " (checksum: " + checksum(_sbuf, s, n) + ")");
-	int z = DELAY;
-	long a = System.currentTimeMillis() + DELAY;
-	long b;
+	s = d;
 	for (;;) {
-		sleep(z);
+		sleep(s);
 		if (_port.bytesAvailable() > 0) // got data
 			return;
-		b = System.currentTimeMillis();
-		if (a <= b) // timed out
+		n = (int)(a - time());
+		if (n <= 0) // timed out
 			return;
-		z = DELAY - (int)(a - b);
+		s = d - n;
 	}
 }
 
@@ -181,7 +180,7 @@ private int address(int house, int unit)
 	X10.debug("\tAddressing " + device_string(house, unit));
 	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
-	return command(0, 2);
+	return command(0, 2, 500);
 }
 
 private int function(int house, int dim, int command)
@@ -189,7 +188,7 @@ private int function(int house, int dim, int command)
 	X10.debug("\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
-	return command(0, 2);
+	return command(0, 2, 300 + dim * 200);
 }
 
 private static long time()
@@ -197,10 +196,9 @@ private static long time()
 	return System.currentTimeMillis();
 }
 
-private static void time(long t)
+private static String time(long t)
 {
-	//X10.timing("Took " + (System.currentTimeMillis() - t) + "ms");
-	X10.info("Took " + (System.currentTimeMillis() - t) + "ms");
+	return (time() - t) + "ms";
 }
 
 private void parse_status(int n)
@@ -341,7 +339,7 @@ private boolean sys_cmd(Command c)
 {
 	switch (c.cmd()) {
 	case SYSTEM_STATE:
-		send(CMD_STATE);
+		send(CMD_STATE, DELAY);
 		return parse_state(listen(true));
 	case RING_DISABLE:
 		return sys_cmd(CMD_RI_DISABLE);
@@ -357,7 +355,7 @@ private boolean sys_cmd(Command c)
 private boolean sys_cmd(int cmd)
 {
 	_sbuf[0] = (byte)cmd;
-	return command(0, 1) == 0;
+	return command(0, 1, DELAY) == 0;
 }
 
 private boolean set_clock(int house, int clear)
@@ -369,7 +367,6 @@ private boolean set_clock(int house, int clear)
 	int minute = calendar.get(Calendar.MINUTE);
 	int second = calendar.get(Calendar.SECOND);
 	X10.debug(_weekdays[wd] + ", day of year: " + day + ", time " + hour + ":" + pad(minute) + ":" + pad(second));
-
 	_sbuf[0] = (byte)CMD_CLOCK;
 	_sbuf[1] = (byte)second;
 	_sbuf[2] = (byte)(minute + ((hour & 1) * 60));
@@ -378,11 +375,10 @@ private boolean set_clock(int house, int clear)
 	_sbuf[5] = (byte)((day >>> 15 ) << 7);
 	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house << 4) | clear);
-	if (command(1, 7) != 0) {
+	if (command(1, 7, 100) != 0) {
 		X10.verbose("!\tInterface did not respond, aborting clock setting.");
 		return false;
 	}
-	X10.info("Clock set");
 	return true;
 }
 
@@ -444,11 +440,6 @@ private static final String parity(int p)
 	return "unknown";
 }
 
-private static final int a1 = 1; // O1	HD501 rf receiver + appliance module 2 prong
-private static final int a2 = 3; // O3	RR466 appliance module 3 prong
-private static final int d1 = 5; // O5	HD465 dimmer module
-private static final int d2 = 7; // 07	WS467 dimmer switch
-
 public void run()
 {
 	int i = 0;
@@ -456,18 +447,19 @@ public void run()
 	Command command;
 	for (;;) {
 		listen(false);
+		t = time();
 		switch (_buf[0] & 0xff) {
 		case 0x5a:
 		case 0x5b:
 			X10.debug("Interface has data for us");
-			t = time();
-			send(0xc3);
+			send(0xc3, DELAY);
 			parse_status(listen(true));
-			time(t);
+			X10.info("Status parsed in " + time(t));
 			break;
 		case 0xa5:
 			X10.debug("Interface asks for clock");
 			set_clock(HOUSE.ordinal(), 3);
+			X10.info("Clock set in " + time(t));
 		}
 		command = getCommand();
 		if (command == null)
@@ -475,21 +467,18 @@ public void run()
 		X10.verbose(command.toString());
 		if (command.exit())
 			break;
+		t = time();
 		if (!command.cmdSystem()) {
-			t = time();
 			if (cmd(command)) {
-				X10.info(command + " complete");
+				X10.info(command + " completed in " + time(t));
 				_commands.remove(0);
 			}
-			time(t);
 			continue;
 		}
-		t = time();
 		if (sys_cmd(command))
-			X10.info(command + " complete");
+			X10.info(command + " completed in " + time(t));
 		else
 			X10.warn(command + " unsuccessful");
-		time(t);
 		_commands.remove(0);
 	}
 	X10.info("shutting down serial interface");
@@ -516,9 +505,9 @@ private synchronized void sleep(int timeout)
 			wait();
 			return;
 		}
-		long z = System.currentTimeMillis();
+		long z = time();
 		wait(timeout);
-		X10.timing("Slept for " + (System.currentTimeMillis() - z) + "ms");
+		X10.timing("Slept for " + time(z));
 	} catch (InterruptedException x) {}
 }
 
