@@ -16,7 +16,6 @@ private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7
 private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
-private static boolean _delay = true;
 private static final int DELAY = 5000;
 
 private static final int CMD_STATE = 0x8b;
@@ -117,16 +116,19 @@ private static int checksum(byte[] buf, int s, int n)
 
 private int listen()
 {
-	if (_delay) {
+	return listen(true);
+}
+
+private int listen(boolean delay)
+{
+	if (delay) {
 		delay(3); // wait 3ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.1ms
 		if (_port.bytesAvailable() > 1) // yep, it's more than one
 			delay(27); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
 	}
-	_delay = true;
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
-	if (n == 0)
-		return 0;
-	X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+	if (n != 0)
+		X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
 	return n;
 }
 
@@ -144,22 +146,20 @@ private int command(byte[] buf, int s, int n)
 			X10.info("Interface wants to send data, aborting command");
 			return 1;
 		}
-		_delay = false;
 		send(buf, n);
-		k = listen();
+		k = listen(false);
 		if (k == 0) {
 			X10.warn("Interface did not respond within " + DELAY + "ms, aborting command");
 			return 2;
 		}
 		z = checksum(_buf, k);
 	} while (z != check);
-	_delay = false;
 	send(0);
-	if (listen() == 1 && (_buf[0] & 0xff) == 0x55) {
-		X10.debug("\tCommand successful");
-		return 0;
-	}
-	return 2;
+	listen(false);
+	if ((_buf[0] & 0xff) != 0x55)
+		return 2;
+	X10.debug("\tCommand successful");
+	return 0;
 }
 
 private void send(int b)
@@ -177,7 +177,18 @@ private void send(byte[] buf, int s, int n)
 {
 	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
 	_port.writeBytes(buf, n);
-	sleep(DELAY);
+	int z = DELAY;
+	long a = System.currentTimeMillis() + DELAY;
+	long b;
+	do {
+		sleep(z);
+		if (_port.bytesAvailable() > 0) // got data
+			return;
+		b = System.currentTimeMillis();
+		if (a <= b) // timed out
+			return;
+		z = DELAY - (int)(a - b);
+	} while (true);
 }
 
 private int address(int house, int unit)
