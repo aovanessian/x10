@@ -65,7 +65,7 @@ public boolean test()
 		return false;
 	}
 	send(CMD_STATE);
-	return (listen() > 0);
+	return (listen(false) > 0);
 }
 
 private void setup()
@@ -114,11 +114,6 @@ private static int checksum(byte[] buf, int s, int n)
 	return z & 0xff;
 }
 
-private int listen()
-{
-	return listen(true);
-}
-
 private int listen(boolean delay)
 {
 	if (delay) {
@@ -132,21 +127,16 @@ private int listen(boolean delay)
 	return n;
 }
 
-private int command(byte[] buf, int n)
+private int command(int s, int n)
 {
-	return command(buf, 0, n);
-}
-
-private int command(byte[] buf, int s, int n)
-{
-	int check = checksum(buf, s, n);
+	int check = checksum(_sbuf, s, n);
 	int z = 0, k;
 	do {
 		if ((_buf[0] & 0xff) == 0x5a) {
 			X10.info("Interface wants to send data, aborting command");
 			return 1;
 		}
-		send(buf, n);
+		send(0, n);
 		k = listen(false);
 		if (k == 0) {
 			X10.warn("Interface did not respond within " + DELAY + "ms, aborting command");
@@ -164,19 +154,14 @@ private int command(byte[] buf, int s, int n)
 
 private void send(int b)
 {
-	byte[] buf = {(byte)(b & 0xff)};
-	send(buf, 1);
+	_sbuf[0] = (byte)(b & 0xff);
+	send(0, 1);
 }
 
-private void send(byte[] buf, int n)
+private void send(int s, int n)
 {
-	send(buf, 0, n);
-}
-
-private void send(byte[] buf, int s, int n)
-{
-	_port.writeBytes(buf, n);
-	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
+	_port.writeBytes(_sbuf, n);
+	X10.debug("\tSent " + X10.hex(_sbuf, n) + " (checksum: " + checksum(_sbuf, s, n) + ")");
 	int z = DELAY;
 	long a = System.currentTimeMillis() + DELAY;
 	long b;
@@ -196,7 +181,7 @@ private int address(int house, int unit)
 	X10.debug("\tAddressing " + device_string(house, unit));
 	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
-	return command(_sbuf, 2);
+	return command(0, 2);
 }
 
 private int function(int house, int dim, int command)
@@ -204,7 +189,7 @@ private int function(int house, int dim, int command)
 	X10.debug("\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
-	return command(_sbuf, 2);
+	return command(0, 2);
 }
 
 private static long time()
@@ -351,7 +336,7 @@ private boolean sys_cmd(Command c)
 	switch (c.cmd()) {
 	case SYSTEM_STATE:
 		send(CMD_STATE);
-		return parse_state(listen());
+		return parse_state(listen(true));
 	case RING_DISABLE:
 		return sys_cmd(CMD_RI_DISABLE);
 	case RING_ENABLE:
@@ -366,7 +351,7 @@ private boolean sys_cmd(Command c)
 private boolean sys_cmd(int cmd)
 {
 	_sbuf[0] = (byte)cmd;
-	return command(_sbuf, 1) == 0;
+	return command(0, 1) == 0;
 }
 
 private boolean set_clock(int house, int clear)
@@ -387,7 +372,7 @@ private boolean set_clock(int house, int clear)
 	_sbuf[5] = (byte)((day >>> 15 ) << 7);
 	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house << 4) | clear);
-	if (command(_sbuf, 1, 7) != 0) {
+	if (command(1, 7) != 0) {
 		X10.verbose("!\tInterface did not respond, aborting clock setting.");
 		return false;
 	}
@@ -472,7 +457,7 @@ public void run()
 			t = time();
 			while ((_buf[0] & 0xff) == 0x5a) {
 				send(0xc3);
-				k = listen();
+				k = listen(true);
 			}
 			parse_status(k);
 			time(t);
