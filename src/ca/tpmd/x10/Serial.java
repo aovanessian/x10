@@ -53,7 +53,7 @@ private static void delay(int ms)
 	}
 }
 
-public synchronized void readData()
+public synchronized void data_available()
 {
 	notify();
 }
@@ -175,12 +175,12 @@ private void send(byte[] buf, int n)
 
 private void send(byte[] buf, int s, int n)
 {
-	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
 	_port.writeBytes(buf, n);
+	X10.debug("\tSent " + X10.hex(buf, n) + " (checksum: " + checksum(buf, s, n) + ")");
 	int z = DELAY;
 	long a = System.currentTimeMillis() + DELAY;
 	long b;
-	do {
+	for (;;) {
 		sleep(z);
 		if (_port.bytesAvailable() > 0) // got data
 			return;
@@ -188,7 +188,7 @@ private void send(byte[] buf, int s, int n)
 		if (a <= b) // timed out
 			return;
 		z = DELAY - (int)(a - b);
-	} while (true);
+	}
 }
 
 private int address(int house, int unit)

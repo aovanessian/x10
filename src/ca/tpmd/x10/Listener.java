@@ -19,7 +19,7 @@ public int getListeningEvents()
 
 public void serialEvent(SerialPortEvent event)
 {
-	comm.readData();
+	comm.data_available();
 }
 
 }
