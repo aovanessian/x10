@@ -14,7 +14,7 @@ private static Control _control = null;
 private static InputStream _in;
 private Command _previous = null;
 
-public static Control create(Serial s, InputStream in)
+public static synchronized Control create(Serial s, InputStream in)
 {
 	if (_control == null)
 		_control = new Control(s, in);
@@ -31,7 +31,7 @@ private Command parse(String s)
 {
 	ArrayList<String> tokens = tokenize(s);
 	if (tokens.size() == 0) {
-		X10.verbose("Empty command");
+		X10.verbose("Empty command, repeating previous: " + _previous);
 		return _previous;
 	}
 	Cmd command = command(tokens.get(0));

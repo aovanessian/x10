@@ -24,7 +24,7 @@ private static final int CMD_RI_DISABLE = 0xdb;
 private static final int CMD_RI_ENABLE = 0xeb;
 private static final int CMD_EEPROM_DL = 0xfb;
 
-public static Serial create(String name)
+public static synchronized Serial create(String name)
 {
 	if (_serial == null)
 		_serial = new Serial(name);
@@ -47,8 +47,10 @@ public static final void list_ports()
 private static void delay(int ms)
 {
 	try {
+		long z = time();
 		Thread.sleep(ms);
-	} catch (Exception e) {
+		X10.timing("Slept for " + time(z));
+	} catch (InterruptedException e) {
 		e.printStackTrace();
 	}
 }
@@ -72,13 +74,13 @@ private void setup()
 {
 	_port = SerialPort.getCommPort(_name);
 	_port.setComPortParameters(4800, 8, SerialPort.ONE_STOP_BIT, SerialPort.NO_PARITY);
-	_port.setComPortTimeouts(SerialPort.TIMEOUT_READ_SEMI_BLOCKING, 0, 0);
+	_port.setComPortTimeouts(SerialPort.TIMEOUT_NONBLOCKING, 0, 0);
 	_port.addDataListener(new Listener(this));
 	_port.openPort();
 	X10.debug(port_settings(_port));
 }
 
-private void teardown()
+private static synchronized void teardown()
 {
 	if (_port == null)
 		return;
@@ -491,15 +493,18 @@ public synchronized void addCommand(Command cmd)
 
 private synchronized void sleep(int timeout)
 {
+	long t = time();
 	try {
 		if (timeout == 0) {
 			wait();
+			X10.timing("Slept for " + time(t));
 			return;
 		}
-		long z = time();
 		wait(timeout);
-		X10.timing("Slept for " + time(z));
-	} catch (InterruptedException x) {}
+		X10.timing("Slept for " + time(t));
+	} catch (InterruptedException x) {
+		x.printStackTrace();
+	}
 }
 
 }
