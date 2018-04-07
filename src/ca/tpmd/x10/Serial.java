@@ -8,15 +8,15 @@ public final class Serial implements Runnable
 {
 
 private final static Code HOUSE = Code.O;
-private final static byte[] _buf = new byte[64];
-private final static byte[] _sbuf = new byte[64];
+private final static byte[] _buf = new byte[32]; // feeling generous here
+private final static byte[] _sbuf = new byte[32];
 private final String _name;
 private static SerialPort _port;
 private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
-private static final int DELAY = 20;
+private static final int DELAY = 25;
 
 private static final int CMD_STATE = 0x8b;
 private static final int CMD_CLOCK = 0x9b;
@@ -101,11 +101,6 @@ private static byte device(int n)
 	return (byte)_codes[n - 1];
 }
 
-private static int checksum(byte[] buf, int n)
-{
-	return checksum(buf, 0, n);
-}
-
 private static int checksum(byte[] buf, int s, int n)
 {
 	int z = 0;
@@ -123,27 +118,26 @@ private int listen(boolean delay)
 	}
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
 	if (n != 0)
-		X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, n) + ")");
+		X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, 0, n) + ")");
 	return n;
 }
 
-private int command(int s, int n, int d)
+private int command(int n, int d)
 {
-	int check = checksum(_sbuf, s, n);
-	int z = 0, k;
+	int check = _sbuf[n];
+	int k;
 	do {
 		if ((_buf[0] & 0xff) == 0x5a) {
 			X10.info("Interface wants to send data, aborting command");
 			return 1;
 		}
-		send(0, n, DELAY);
+		send_buf(n, DELAY);
 		k = listen(false);
 		if (k == 0) {
 			X10.warn("Interface did not respond within " + DELAY + "ms, aborting command");
 			return 2;
 		}
-		z = checksum(_buf, k);
-	} while (z != check);
+	} while (_buf[0] != check);
 	send(0, d);
 	listen(false);
 	if ((_buf[0] & 0xff) != 0x55)
@@ -154,16 +148,16 @@ private int command(int s, int n, int d)
 
 private void send(int b, int d)
 {
-	_sbuf[0] = (byte)(b & 0xff);
-	send(0, 1, d);
+	_sbuf[0] = _sbuf[1] = (byte)(b & 0xff);
+	send_buf(1, d);
 }
 
-private void send(int s, int n, int d)
+private void send_buf(int n, int d)
 {
 	_port.writeBytes(_sbuf, n);
 	long a = time() + d;
-	X10.debug("\tSent " + X10.hex(_sbuf, n) + " (checksum: " + checksum(_sbuf, s, n) + ")");
-	s = d;
+	X10.debug("\tSent " + X10.hex(_sbuf, n) + " (checksum: " + _sbuf[n] + ")");
+	int s = d;
 	for (;;) {
 		sleep(s);
 		if (_port.bytesAvailable() > 0) // got data
@@ -180,7 +174,8 @@ private int address(int house, int unit)
 	X10.debug("\tAddressing " + device_string(house, unit));
 	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
-	return command(0, 2, 500);
+	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
+	return command(2, 500);
 }
 
 private int function(int house, int dim, int command)
@@ -188,7 +183,8 @@ private int function(int house, int dim, int command)
 	X10.debug("\tFunction " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
-	return command(0, 2, 300 + dim * 200);
+	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
+	return command(2, 300 + dim * 200);
 }
 
 private static long time()
@@ -282,18 +278,16 @@ private boolean parse_state(int n)
 	while ((z >>>= 1) != 0)
 		i++;
 	s.append(_weekdays[i]);
-	s.append("\n\t");
-	s.append(calendar.getTime());
-	s.append("\n\tTime: ");
+	s.append(" ");
 	s.append((_buf[4] << 1) + (_buf[3] / 60));
 	s.append(":");
 	s.append(pad(_buf[3] % 60));
 	s.append(":");
 	s.append(pad(_buf[2]));
-	s.append("\n\tMonitored house code: ");
+	s.append(" (sanity check: ");
+	s.append(calendar.getTime());
 	String house = Code.lookup((_buf[7] >>> 4) & 0xf).toString();
-	s.append(house);
-	s.append("\n\t");
+	s.append(")\n\n\t");
 	int addr = (_buf[9] << 8 | _buf[8] & 0xff) & 0xffff;
 	int off = (_buf[11] << 8 | _buf[10] & 0xff) & 0xffff;
 	int dim = (_buf[13] << 8 | _buf[12] & 0xff) & 0xffff;
@@ -354,8 +348,8 @@ private boolean sys_cmd(Command c)
 
 private boolean sys_cmd(int cmd)
 {
-	_sbuf[0] = (byte)cmd;
-	return command(0, 1, DELAY) == 0;
+	_sbuf[0] = _sbuf[1] = (byte)cmd;
+	return command(1, DELAY) == 0;
 }
 
 private boolean set_clock(int house, int clear)
@@ -375,7 +369,8 @@ private boolean set_clock(int house, int clear)
 	_sbuf[5] = (byte)((day >>> 15 ) << 7);
 	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house << 4) | clear);
-	if (command(1, 7, 100) != 0) {
+	_sbuf[7] = (byte)checksum(_sbuf, 1, 7);
+	if (command(7, DELAY) != 0) {
 		X10.verbose("!\tInterface did not respond, aborting clock setting.");
 		return false;
 	}
