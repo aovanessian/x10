@@ -66,7 +66,7 @@ public boolean test()
 		X10.log(0, "Could not open port");
 		return false;
 	}
-	send(CMD_STATE, 1200);
+	send(CMD_RI_ENABLE, 1200);
 	return (listen(false) > 0);
 }
 
@@ -120,7 +120,7 @@ private int listen(boolean delay)
 	}
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
 	if (n != 0)
-		X10.debug("\tGot  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, 0, n) + ")");
+		X10.debug("Got  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, 0, n) + ")");
 	return n;
 }
 
@@ -154,7 +154,7 @@ private void send_buf(int n, int d)
 {
 	_port.writeBytes(_sbuf, n);
 	long a = time() + d;
-	X10.debug("\tSent " + X10.hex(_sbuf, n) + " (checksum: " + _sbuf[n] + ")");
+	X10.debug("Sent " + X10.hex(_sbuf, n) + " (checksum: " + _sbuf[n] + ")");
 	int s = d;
 	for (;;) {
 		sleep(s);
@@ -169,7 +169,7 @@ private void send_buf(int n, int d)
 
 private int address(int house, int unit)
 {
-	X10.debug("\tAddressing " + device_string(house, unit));
+	X10.debug("Addressing " + device_string(house, unit));
 	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | device(unit));
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -178,7 +178,7 @@ private int address(int house, int unit)
 
 private int function(int house, int dim, int command)
 {
-	X10.debug("\tFunction " + command + ", dim " + dim);
+	X10.debug("Function " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -379,7 +379,8 @@ private static final String port_settings(SerialPort port)
 {
 	if (port == null)
 		return "Null port descriptor";
-	StringBuilder result = new StringBuilder(port.getSystemPortName());
+	StringBuilder result = new StringBuilder("\n\t");
+	result.append(port.getSystemPortName());
 	result.append("\n\tName:         ");
 	result.append(port.getDescriptivePortName());
 	result.append("\n\tBaud rate:    ");
