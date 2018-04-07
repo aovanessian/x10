@@ -125,25 +125,21 @@ private int listen(boolean delay)
 private int command(int n, int d)
 {
 	int check = _sbuf[n];
-	int k;
+	int k = n << 4;
 	do {
 		if ((_buf[0] & 0xff) == 0x5a) {
 			X10.info("Interface wants to send data, aborting command");
 			return 1;
 		}
-		send_buf(n, DELAY);
-		k = listen(false);
-		if (k == 0) {
-			X10.warn("Interface did not respond within " + DELAY + "ms, aborting command");
+		send_buf(n, k);
+		if (listen(false) == 0) {
+			X10.warn("Interface did not respond within " + k + "ms, aborting command");
 			return 2;
 		}
 	} while (_buf[0] != check);
 	send(0, d);
 	listen(false);
-	if ((_buf[0] & 0xff) != 0x55)
-		return 2;
-	X10.debug("\tCommand successful");
-	return 0;
+	return (_buf[0] & 0xff) == 0x55 ? 0 : 2;
 }
 
 private void send(int b, int d)
