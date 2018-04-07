@@ -17,12 +17,18 @@ private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wedne
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
 private static final int DELAY = 25;
+private static final int RETRIES = 4;
 
+private static final int ST_POWER_OUTAGE = 0xa5;
+private static final int ST_HAVE_DATA = 0x5a;
+private static final int ST_READY = 0x55;
+
+private static final int CMD_SEND = 0xc3;
 private static final int CMD_STATE = 0x8b;
 private static final int CMD_CLOCK = 0x9b;
-private static final int CMD_RI_DISABLE = 0xdb;
-private static final int CMD_RI_ENABLE = 0xeb;
-private static final int CMD_EEPROM_DL = 0xfb;
+private static final int CMD_RING_DISABLE = 0xdb;
+private static final int CMD_RING_ENABLE = 0xeb;
+private static final int CMD_DL_EEPROM = 0xfb;
 
 public static synchronized Serial create(String name)
 {
@@ -66,7 +72,9 @@ public boolean test()
 		X10.log(0, "Could not open port");
 		return false;
 	}
-	send(CMD_RI_ENABLE, 1200);
+	if (listen(false) > 0)
+		return true;
+	send(CMD_RING_ENABLE, 1200);
 	return (listen(false) > 0);
 }
 
@@ -120,28 +128,28 @@ private int listen(boolean delay)
 	}
 	int n = _port.readBytes(_buf, _port.bytesAvailable());
 	if (n != 0)
-		X10.debug("Got  " + X10.hex(_buf, n) + " (checksum: " + checksum(_buf, 0, n) + ")");
+		X10.debug("Got  " + X10.hex(_buf, n) + " (checksum: " + X10.hex(checksum(_buf, 0, n)) + ")");
 	return n;
 }
 
-private int command(int n, int d)
+private boolean command(int n, int d)
 {
 	int check = _sbuf[n];
 	int k = n << 4;
 	do {
-		if ((_buf[0] & 0xff) == 0x5a) {
-			X10.info("Interface wants to send data, aborting command");
-			return 1;
+		if ((_buf[0] & 0xff) == ST_HAVE_DATA) {
+			X10.info("Interface has data, aborting command");
+			return false;
 		}
 		send_buf(n, k);
 		if (listen(false) == 0) {
 			X10.warn("Interface did not respond within " + k + "ms, aborting command");
-			return 2;
+			return false;
 		}
 	} while (_buf[0] != check);
 	send(0, d);
 	listen(false);
-	return (_buf[0] & 0xff) == 0x55 ? 0 : 2;
+	return (_buf[0] & 0xff) == ST_READY;
 }
 
 private void send(int b, int d)
@@ -154,7 +162,7 @@ private void send_buf(int n, int d)
 {
 	_port.writeBytes(_sbuf, n);
 	long a = time() + d;
-	X10.debug("Sent " + X10.hex(_sbuf, n) + " (checksum: " + _sbuf[n] + ")");
+	X10.debug("Sent " + X10.hex(_sbuf, n) + " (checksum: " + X10.hex(_sbuf[n]) + ")");
 	int s = d;
 	for (;;) {
 		sleep(s);
@@ -167,7 +175,7 @@ private void send_buf(int n, int d)
 	}
 }
 
-private int address(int house, int unit)
+private boolean address(int house, int unit)
 {
 	X10.debug("Addressing " + device_string(house, unit));
 	_sbuf[0] = (byte)0xc;
@@ -176,7 +184,7 @@ private int address(int house, int unit)
 	return command(2, 500);
 }
 
-private int function(int house, int dim, int command)
+private boolean function(int house, int dim, int command)
 {
 	X10.debug("Function " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
@@ -263,7 +271,7 @@ private boolean parse_state(int n)
 	s.append("\n\tFirmware revision: ");
 	s.append(_buf[7] & 0xf);
 	s.append("\n\tMinutes on battery power: ");
-	z = (_buf[0] << 8 | _buf[1] & 0xff) & 0xffff;
+	z = (_buf[1] << 8 | _buf[0] & 0xff) & 0xffff;
 	s.append(z == 0xffff ? "unknown, needs clear" : z);
 	z = _buf[5] & 0xff | _buf[6] & 0x80;
 	Calendar calendar = Calendar.getInstance();
@@ -309,17 +317,13 @@ private boolean parse_state(int n)
 
 private boolean cmd(Command c)
 {
-	int result = 0;
 	int house = c.houseCode();
 	int[] units = c.units();
 	if (units != null)
 		for (int i = 0; i < units.length; i++)
-			if ((result = address(house, units[i])) != 0)
-				break;
-	if (result == 0)
-		result = function(house, c.dim(), c.cmdCode());
-	return result == 0;
-	
+			if (!address(house, units[i]))
+				return false;
+	return function(house, c.dim(), c.cmdCode());
 }
 
 private static final String pad(int n)
@@ -334,9 +338,9 @@ private boolean sys_cmd(Command c)
 		send(CMD_STATE, DELAY);
 		return parse_state(listen(true));
 	case RING_DISABLE:
-		return sys_cmd(CMD_RI_DISABLE);
+		return sys_cmd(CMD_RING_DISABLE);
 	case RING_ENABLE:
-		return sys_cmd(CMD_RI_ENABLE);
+		return sys_cmd(CMD_RING_ENABLE);
 	case CLOCK_SET:
 		return set_clock(c.houseCode(), 0);
 	}
@@ -347,7 +351,7 @@ private boolean sys_cmd(Command c)
 private boolean sys_cmd(int cmd)
 {
 	_sbuf[0] = _sbuf[1] = (byte)cmd;
-	return command(1, DELAY) == 0;
+	return command(1, DELAY);
 }
 
 private boolean set_clock(int house, int clear)
@@ -368,11 +372,7 @@ private boolean set_clock(int house, int clear)
 	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house << 4) | clear);
 	_sbuf[7] = (byte)checksum(_sbuf, 1, 7);
-	if (command(7, DELAY) != 0) {
-		X10.verbose("!\tInterface did not respond, aborting clock setting.");
-		return false;
-	}
-	return true;
+	return command(7, DELAY);
 }
 
 private static final String port_settings(SerialPort port)
@@ -436,24 +436,24 @@ private static final String parity(int p)
 
 public void run()
 {
-	int i = 0;
+	int i = RETRIES;
 	long t;
 	Command command;
 	for (;;) {
 		listen(false);
 		t = time();
 		switch (_buf[0] & 0xff) {
-		case 0x5a:
-		case 0x5b:
+		case ST_HAVE_DATA:
 			X10.debug("Interface has data for us");
-			send(0xc3, DELAY);
+			send(CMD_SEND, DELAY);
 			parse_status(listen(true));
 			X10.info("Status parsed in " + time(t));
 			break;
-		case 0xa5:
-			X10.debug("Interface asks for clock");
-			set_clock(HOUSE.ordinal(), 3);
-			X10.info("Clock set in " + time(t));
+		case ST_POWER_OUTAGE:
+			X10.info("Interface reports power outage");
+			send(CMD_CLOCK, DELAY);
+			//set_clock(HOUSE.ordinal(), 3);
+			//X10.info("Clock set in " + time(t));
 		}
 		command = getCommand();
 		if (command == null)
@@ -465,8 +465,14 @@ public void run()
 		if (!command.cmdSystem()) {
 			if (cmd(command)) {
 				X10.info(command + " completed in " + time(t));
-				_commands.remove(0);
+				//_commands.remove(0);
+				i = 0;//RETRIES;
 			}
+			if (i == 0) {
+				_commands.remove(0);
+				i = RETRIES;
+			}
+			i--;
 			continue;
 		}
 		if (sys_cmd(command))
@@ -509,4 +515,3 @@ private synchronized void sleep(int timeout)
 }
 
 }
-
