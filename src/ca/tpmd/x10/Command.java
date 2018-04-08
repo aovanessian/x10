@@ -1,6 +1,6 @@
 package ca.tpmd.x10;
 
-public class Command
+public final class Command
 {
 
 private final Cmd _command;

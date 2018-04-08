@@ -1,6 +1,6 @@
 package ca.tpmd.x10;
 
-public class X10
+public final class X10
 {
 
 private static final char[] _hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
@@ -12,9 +12,9 @@ private static final int INFO = 0;
 private static final int WARN = -1;
 private static final int ERR = -2;
 
-private static int _level = INFO;
+private static int _level;
 
-public static final void log_level(int level)
+static final void log_level(int level)
 {
 	String s;
 	if (level > DEBUG)
@@ -74,7 +74,7 @@ public static final void log(int l, String s)
 		System.out.println(s);
 }
 
-public static final String hex(int n)
+static final String hex(int n)
 {
         int c = n & 0xff;
         StringBuilder result = new StringBuilder(4);
@@ -84,7 +84,7 @@ public static final String hex(int n)
         return result.toString();
 }
 
-public static final String hex(byte[] buf, int n)
+static final String hex(byte[] buf, int n)
 {
 	if (n <= 0)
 		return "";
@@ -108,11 +108,11 @@ public static void main(String[] args)
 	}
 	Serial comm = Serial.create(args[0]);
 	log(INFO, "X10 control");
+	log_level(INFO);
 	if (!comm.test()) {
 		log(ERR, "Interface at " + args[0] + " does not respond, exiting...");
 		System.exit(1);
 	}
-	log_level(INFO);
 	log(INFO, "Interface at " + args[0] + " ready.\n");
 	Thread t = new Thread(comm);
 	t.start();

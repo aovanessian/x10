@@ -2,7 +2,7 @@ package ca.tpmd.x10;
 
 import com.fazecast.jSerialComm.*;
 
-public class Listener implements SerialPortDataListener
+public final class Listener implements SerialPortDataListener
 {
 
 Serial comm;
