@@ -62,7 +62,7 @@ private static void delay(int ms)
 	X10.timing("Slept for " + time(z));
 }
 
-public synchronized void data_available()
+synchronized void data_available()
 {
 	notify();
 }
@@ -75,8 +75,10 @@ public boolean test()
 	}
 	if (listen(false) > 0)
 		return true;
-	send(CMD_RING_ENABLE, 1200);
-	return (listen(false) > 0);
+	_sbuf[0] = 0x0e; // A
+	_sbuf[1] = 0x69; // HAIL_ACK
+	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
+	return command(2, 500);
 }
 
 private void setup()
@@ -157,16 +159,22 @@ private void send(int b, int d)
 private void send_buf(int n, int d)
 {
 	_port.writeBytes(_sbuf, n);
+//	_buf[0] = 0;
 	long a = time() + d;
 	X10.debug("Sent " + X10.hex(_sbuf, n) + " (checksum: " + X10.hex(_sbuf[n]) + ")");
 	int s = d;
+	X10.debug("will sleep for " + d + "ms");
 	for (;;) {
 		sleep(s);
-		if (_port.bytesAvailable() > 0) // got data
+		if (_port.bytesAvailable() > 0) { // got data
+			X10.debug("received data");
 			return;
+		}
 		n = (int)(a - time());
-		if (n <= 0) // timed out
+		if (n <= 0) { // timed out
+			X10.debug("wait() timed out");
 			return;
+		}
 		s = d - n;
 	}
 }
@@ -269,7 +277,7 @@ private boolean parse_state(int n)
 	s.append(_buf[7] & 0xf);
 	s.append("\n\tMinutes on battery power: ");
 	z = (_buf[1] << 8 | _buf[0] & 0xff) & 0xffff;
-	s.append(z == 0xffff ? "unknown, needs clear" : z);
+	s.append(z == 0xffff ? "unknown - batteries dead?" : z);
 	z = _buf[5] & 0xff | _buf[6] & 0x80;
 	Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.DAY_OF_YEAR, z);
@@ -378,19 +386,19 @@ private static final String port_settings(SerialPort port)
 		return "Null port descriptor";
 	StringBuilder result = new StringBuilder("\n\t");
 	result.append(port.getSystemPortName());
-	result.append("\n\tName:         ");
+	result.append("\n\tName:\t\t");
 	result.append(port.getDescriptivePortName());
-	result.append("\n\tBaud rate:    ");
+	result.append("\n\tBaud rate:\t");
 	result.append(port.getBaudRate());
-	result.append("\n\tParity:       ");
+	result.append("\n\tParity:\t\t");
 	result.append(parity(port.getParity()));
-	result.append("\n\tFlow control: ");
+	result.append("\n\tFlow control:\t");
 	result.append(flow(port.getFlowControlSettings()));
-	result.append("\n\tData bits:    ");
+	result.append("\n\tData bits:\t");
 	result.append(port.getNumDataBits());
-	result.append("\n\tStop bits:    ");
+	result.append("\n\tStop bits:\t");
 	result.append(port.getNumStopBits());
-	result.append("\n\tOpened:       ");
+	result.append("\n\tOpened:\t\t");
 	result.append(port.isOpen());
 	return result.toString();
 }
@@ -493,7 +501,7 @@ private Command getCommand()
 	return _commands.isEmpty() ? null : _commands.get(0);
 }
 
-public synchronized void addCommand(Command cmd)
+synchronized void addCommand(Command cmd)
 {
 	notify();
 	_commands.add(cmd);
