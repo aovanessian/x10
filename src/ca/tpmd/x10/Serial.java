@@ -102,14 +102,9 @@ private static synchronized void teardown()
 private static String device_string(int house, int unit)
 {
 	StringBuilder result = new StringBuilder(2);
-	result.append((char)(house & 0xff));
-	result.append(unit);
+	result.append((char)(_lookup[house]));
+	result.append(_lookup[unit] - '@');
 	return result.toString();
-}
-
-private static byte device(int n)
-{
-	return _codes[n - 1];
 }
 
 private static int checksum(byte[] buf, int s, int n)
@@ -180,7 +175,7 @@ private boolean address(int house, int unit)
 {
 	X10.debug("Addressing " + device_string(house, unit));
 	_sbuf[0] = (byte)0xc;
-	_sbuf[1] = (byte)(house << 4 | device(unit));
+	_sbuf[1] = (byte)(house << 4 | unit);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
 	return command(2, 500);
 }
@@ -323,7 +318,7 @@ private boolean cmd(Command c)
 	int[] units = c.units();
 	if (units != null)
 		for (int i = 0; i < units.length; i++)
-			if (!address(house, units[i]))
+			if (!address(house, _codes[units[i] - 1]))
 				return false;
 	return function(house, c.dim(), c.cmdCode());
 }
