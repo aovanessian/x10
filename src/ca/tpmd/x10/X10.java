@@ -6,8 +6,8 @@ public class X10
 private static final char[] _hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
 private static final int DEBUG = 7;
-private static final int VERBOSE = 6;
-private static final int TIMING = 5;
+private static final int TIMING = 6;
+private static final int VERBOSE = 5;
 private static final int INFO = 4;
 private static final int WARN = 3;
 private static final int ERR = 2;
@@ -16,7 +16,7 @@ private static int _level = INFO;
 
 public static final void debug(String s)
 {
-	log(DEBUG, "DEBUG\t" + s);
+	log(DEBUG, "DEBUG\t\t" + s);
 }
 
 public static final void verbose(String s)

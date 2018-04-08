@@ -445,6 +445,7 @@ public void run()
 		t = time();
 		switch (_buf[0] & 0xff) {
 		case ST_READY: // sent by interface upon startup (_not_ 0xa5 as stated in protocol; that comes later)
+			X10.info("Interface ready");
 			delay(1200); // wait for 'power out' message
 			continue;
 		case ST_HAVE_DATA:
