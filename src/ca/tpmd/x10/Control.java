@@ -6,7 +6,7 @@ import java.util.NoSuchElementException;
 import java.util.Locale;
 import java.io.InputStream;
 
-public class Control implements Runnable
+public final class Control implements Runnable
 {
 
 private static Serial _serial;
@@ -29,14 +29,16 @@ private Control(Serial s, InputStream in)
 
 private Command parse(String s)
 {
+	if (s.startsWith("#"))
+		return null;
 	ArrayList<String> tokens = tokenize(s);
 	if (tokens.size() == 0) {
-		X10.verbose("Empty command, repeating previous: " + _previous);
+		X10.info("Empty command, repeating previous: " + _previous);
 		return _previous;
 	}
 	Cmd command = command(tokens.get(0));
 	if (command == null) {
-		X10.warn("Not a valid command: " + tokens.get(0));
+		X10.err("Not a valid command: " + tokens.get(0));
 		return null;
 	}
 	switch (command) {
