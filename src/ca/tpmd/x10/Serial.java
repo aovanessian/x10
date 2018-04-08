@@ -73,12 +73,7 @@ public boolean test()
 		X10.log(0, "Could not open port");
 		return false;
 	}
-	if (listen(false) > 0)
-		return true;
-	_sbuf[0] = 0x0e; // A
-	_sbuf[1] = 0x69; // HAIL_ACK
-	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
-	return command(2, 500);
+	return true;
 }
 
 private void setup()
@@ -159,7 +154,6 @@ private void send(int b, int d)
 private void send_buf(int n, int d)
 {
 	_port.writeBytes(_sbuf, n);
-//	_buf[0] = 0;
 	long a = time() + d;
 	X10.debug("Sent " + X10.hex(_sbuf, n) + " (checksum: " + X10.hex(_sbuf[n]) + ")");
 	int s = d;

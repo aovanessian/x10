@@ -110,7 +110,7 @@ public static void main(String[] args)
 	log(INFO, "X10 control");
 	log_level(INFO);
 	if (!comm.test()) {
-		log(ERR, "Interface at " + args[0] + " does not respond, exiting...");
+		log(ERR, "Could not open port " + args[0] + ", exiting...");
 		System.exit(1);
 	}
 	log(INFO, "Interface at " + args[0] + " ready.\n");
