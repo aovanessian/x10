@@ -23,6 +23,7 @@ SYSTEM_STATE		(false,	"system state"),
 RING_ENABLE		(false, "enable serial ring"),
 RING_DISABLE		(false, "disable serial ring"),
 CLOCK_SET		(false, "set interface clock"),
+LOG_LEVEL		(false,	"log level"),
 EXIT			(false,	"exit");
 
 private final boolean addr;
@@ -59,5 +60,6 @@ String label()
 {
 	return label;
 }
+
 
 }

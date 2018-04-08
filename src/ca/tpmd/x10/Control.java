@@ -47,22 +47,30 @@ private Command parse(String s)
 		return new Command(command, null);
 	}
 	if (tokens.size() < 2) {
-		X10.warn("Not enough parameters: " + s);
+		X10.err("Not enough parameters: " + s);
 		return null;
 	}
 	int dim = 0;
 	int token = 1;
 	Code house;
+	if (command == Cmd.LOG_LEVEL) {
+		dim = number(tokens.get(token));
+		if (dim >= 0)
+			X10.log_level(dim);
+		else
+			X10.warn("Not changing log level");
+		return null;
+	}
 	if (command.need_dim()) {
 		if (tokens.size() < 4) {
-			X10.warn("Not enough parameters for " + command + ": " + s);
+			X10.err("Not enough parameters for " + command + ": " + s);
 			return null;
 		}
 		dim = number(tokens.get(token++));
 		if (dim == -1)
 			return null;
 		if (dim < 0 || dim > 22) {
-			X10.warn(command + " level outside of allowed range [0..22]: " + dim);
+			X10.err(command + " level outside of allowed range [0..22]: " + dim);
 			return null;
 		}
 	}
@@ -82,7 +90,7 @@ private Command parse(String s)
 		if (n == -1)
 			return null;
 		if (n < 1 || n > 16) {
-			X10.warn("Unit id outside of allowed range [1..16]: " + n);
+			X10.err("Unit id outside of allowed range [1..16]: " + n);
 			return null;
 		}
 		units[k++] = n;
@@ -117,7 +125,7 @@ private int number(String s)
 	try {
 		return Integer.parseInt(s);
 	} catch (NumberFormatException x) {
-		X10.warn("Not a number: " + s);
+		X10.err("Not a number: " + s);
 		return -1;
 	}
 }
@@ -125,12 +133,12 @@ private int number(String s)
 private Code house(String s)
 {
 	if (s.length() != 1) {
-		X10.warn("Invalid house code '" + s + "'");
+		X10.err("Invalid house code '" + s + "'");
 		return null;
 	}
 	char c = s.charAt(0);
 	if (c < 'A' || c > 'P') {
-		X10.warn("Invalid house code '" + c + "'");
+		X10.err("Invalid house code '" + c + "'");
 		return null;
 	}
 	return Code.valueOf(s);
@@ -192,6 +200,9 @@ private Cmd command(String s)
 	case "quit":
 	case "exit":
 		return Cmd.EXIT;
+	case "l":
+	case "log":
+		return Cmd.LOG_LEVEL;
 	}
 	return null;
 }

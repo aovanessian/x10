@@ -5,14 +5,38 @@ public class X10
 
 private static final char[] _hex = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
-private static final int DEBUG = 7;
-private static final int TIMING = 6;
-private static final int VERBOSE = 5;
-private static final int INFO = 4;
-private static final int WARN = 3;
-private static final int ERR = 2;
+private static final int DEBUG = 3;
+private static final int TIMING = 2;
+private static final int VERBOSE = 1;
+private static final int INFO = 0;
+private static final int WARN = -1;
+private static final int ERR = -2;
 
 private static int _level = INFO;
+
+public static final void log_level(int level)
+{
+	String s;
+	if (level > DEBUG)
+		level = DEBUG;
+	switch (level) {
+	case DEBUG:
+		s = "DEBUG";
+		break;
+	case TIMING:
+		s = "TIMING";
+		break;
+	case VERBOSE:
+		s = "VERBOSE";
+		break;
+	case INFO:
+	default:
+		s = "INFO";
+		level = INFO;
+	}
+	log(INFO, "Log level: " + s);
+	_level = level;
+}
 
 public static final void debug(String s)
 {
@@ -88,6 +112,7 @@ public static void main(String[] args)
 		log(ERR, "Interface at " + args[0] + " does not respond, exiting...");
 		System.exit(1);
 	}
+	log_level(INFO);
 	log(INFO, "Interface at " + args[0] + " ready.\n");
 	Thread t = new Thread(comm);
 	t.start();
