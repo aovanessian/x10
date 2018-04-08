@@ -446,7 +446,7 @@ public void run()
 		switch (_buf[0] & 0xff) {
 		case ST_READY: // sent by interface upon startup (_not_ 0xa5 as stated in protocol; that comes later)
 			X10.info("Interface ready");
-			delay(1200); // wait for 'power out' message
+			sleep(1200); // wait for 'power out' message
 			continue;
 		case ST_HAVE_DATA:
 			X10.debug("Interface has data for us");
@@ -472,12 +472,11 @@ public void run()
 				r = RETRIES;
 				continue;
 			}
-			if (r == 0) { // interface not responding - either power is out or there's traffic on the line
+			if (--r == 0) { // interface not responding - either power is out or there's traffic on the line
 				X10.warn(command + " unsuccessful " + RETRIES + " times, will wait for interface to wake us up");
 				r = RETRIES;
 				sleep(0); // we'll get woken up when inerface sends data (or more commands added)
 			}
-			r--;
 			continue;
 		}
 		if (sys_cmd(command))
