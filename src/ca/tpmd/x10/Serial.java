@@ -17,7 +17,7 @@ private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wedne
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
 private static final int DELAY = 25;
-private static final int RETRIES = 4;
+private static final int RETRIES = 3;
 
 private static final int ST_POWER_OUTAGE = 0xa5;
 private static final int ST_HAVE_DATA = 0x5a;
@@ -52,13 +52,13 @@ public static final void list_ports()
 
 private static void delay(int ms)
 {
+	long z = time();
 	try {
-		long z = time();
 		Thread.sleep(ms);
-		X10.timing("Slept for " + time(z));
 	} catch (InterruptedException e) {
 		e.printStackTrace();
 	}
+	X10.timing("Slept for " + time(z));
 }
 
 public synchronized void data_available()
@@ -135,7 +135,7 @@ private int listen(boolean delay)
 private boolean command(int n, int d)
 {
 	int check = _sbuf[n];
-	int k = n << 4;
+	int k = 4 + (n << 3);
 	do {
 		if ((_buf[0] & 0xff) == ST_HAVE_DATA) {
 			X10.info("Interface has data, aborting command");
@@ -222,10 +222,10 @@ private void parse_status(int n)
 	int z;
 	StringBuilder s = new StringBuilder();
 	while (p < k) {
-		b = map & 1;
-		X10.debug("Byte at " + p + " is " + (b == 0 ? "address" : "function"));
 		z = _buf[p++] & 0xff;
+		b = map & 1;
 		map >>>= 1;
+		X10.debug("Byte at " + p + " is " + (b == 0 ? "address" : "function"));
 		if (b == 0) {
 			s.append(Code.lookup(z >>> 4));
 			s.append((Code.lookup(z & 0xf).toString().charAt(0) - 'A' + 1) & 0xff);
@@ -436,13 +436,17 @@ private static final String parity(int p)
 
 public void run()
 {
-	int i = RETRIES;
+	int r = RETRIES;
 	long t;
 	Command command;
 	for (;;) {
+		_buf[0] = 0;
 		listen(false);
 		t = time();
 		switch (_buf[0] & 0xff) {
+		case ST_READY: // sent by interface upon startup (_not_ 0xa5 as stated in protocol; that comes later)
+			delay(1200); // wait for 'power out' message
+			continue;
 		case ST_HAVE_DATA:
 			X10.debug("Interface has data for us");
 			send(CMD_SEND, DELAY);
@@ -451,9 +455,7 @@ public void run()
 			break;
 		case ST_POWER_OUTAGE:
 			X10.info("Interface reports power outage");
-			send(CMD_CLOCK, DELAY);
-			//set_clock(HOUSE.ordinal(), 3);
-			//X10.info("Clock set in " + time(t));
+			set_clock(HOUSE.ordinal(), 0);
 		}
 		command = getCommand();
 		if (command == null)
@@ -465,14 +467,16 @@ public void run()
 		if (!command.cmdSystem()) {
 			if (cmd(command)) {
 				X10.info(command + " completed in " + time(t));
-				//_commands.remove(0);
-				i = 0;//RETRIES;
-			}
-			if (i == 0) {
 				_commands.remove(0);
-				i = RETRIES;
+				r = RETRIES;
+				continue;
 			}
-			i--;
+			if (r == 0) { // interface not responding - either power is out or there's traffic on the line
+				X10.warn(command + " unsuccessful " + RETRIES + " times, will wait for interface to wake us up");
+				r = RETRIES;
+				sleep(0); // we'll get woken up when inerface sends data (or more commands added)
+			}
+			r--;
 			continue;
 		}
 		if (sys_cmd(command))
@@ -502,16 +506,14 @@ private synchronized void sleep(int timeout)
 {
 	long t = time();
 	try {
-		if (timeout == 0) {
+		if (timeout == 0)
 			wait();
-			X10.timing("Slept for " + time(t));
-			return;
-		}
-		wait(timeout);
-		X10.timing("Slept for " + time(t));
+		else
+			wait(timeout);
 	} catch (InterruptedException x) {
 		x.printStackTrace();
 	}
+	X10.timing("Slept for " + time(t));
 }
 
 }
