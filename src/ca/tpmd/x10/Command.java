@@ -3,24 +3,24 @@ package ca.tpmd.x10;
 public class Command
 {
 
-private final Code _house;
 private final Cmd _command;
-private final int[] _units;
 private final int _dim;
+private final int _house;
+private final int[] _units;
 
-public Command(Cmd c, Code house)
+public Command(Cmd c, int house)
 {
 	this(c, house, null, 0);
 }
 
-public Command(Cmd c, Code house, int unit)
+public Command(Cmd c, int house, int unit)
 {
 	this(c, house, unit, 0);
 	if (c.need_dim())
 		throw new IllegalArgumentException(c.label() + ": need dim level");
 }
 
-public Command(Cmd c, Code house, int unit, int dim)
+public Command(Cmd c, int house, int unit, int dim)
 {
 	if (unit < 1 || unit > 16)
 		throw new IllegalArgumentException("Unit id outside allowed range: " + unit);
@@ -38,14 +38,14 @@ public Command(Cmd c, Code house, int unit, int dim)
 
 }
 
-public Command(Cmd c, Code house, int[] units)
+public Command(Cmd c, int house, int[] units)
 {
 	this(c, house, units, 0);
 	if (c.need_dim())
 		throw new IllegalArgumentException(c.label() + ": need dim level");
 }
 
-public Command(Cmd c, Code house, int[] units, int dim)
+public Command(Cmd c, int house, int[] units, int dim)
 {
 	if (c.need_addr()) {
 		if (units == null)
@@ -92,9 +92,9 @@ public boolean exit()
 	return _command == Cmd.EXIT;
 }
 
-public int houseCode()
+public int house()
 {
-	return _house.ordinal();
+	return _house;
 }
 
 public int[] units()
@@ -112,12 +112,12 @@ public String toString()
 	StringBuilder s = new StringBuilder();
 	if (_units != null) {
 		for (int i = 0; i < _units.length; i++) {
-			s.append(_house);
+			s.append((char)(_house + 'A'));
 			s.append(_units[i]);
 			s.append(" ");
 		}
-	} else if (_house != null) {
-		s.append(_house);
+	} else if (_house != -1) {
+		s.append((char)(_house + 'A'));
 		s.append(" ");
 	}
 	s.append(_command.label());

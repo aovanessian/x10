@@ -7,12 +7,13 @@ import java.util.ArrayList;
 public final class Serial implements Runnable
 {
 
-private final static Code HOUSE = Code.O;
+private final static int HOUSE = 'O' - 'A';
 private final static byte[] _buf = new byte[32]; // feeling generous here
 private final static byte[] _sbuf = new byte[32];
 private final String _name;
 private static SerialPort _port;
-private final static int[] _codes = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
+private final static byte[] _codes  = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
+private final static byte[] _lookup = {'M', 'E', 'C', 'K', 'O', 'G', 'A', 'I', 'N', 'F', 'D', 'L', 'P', 'H', 'B', 'J'};
 private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
@@ -108,7 +109,7 @@ private static String device_string(int house, int unit)
 
 private static byte device(int n)
 {
-	return (byte)_codes[n - 1];
+	return _codes[n - 1];
 }
 
 private static int checksum(byte[] buf, int s, int n)
@@ -222,13 +223,14 @@ private void parse_status(int n)
 	int z;
 	StringBuilder s = new StringBuilder();
 	while (p < k) {
-		z = _buf[p++] & 0xff;
+		z = _buf[p] & 0xff;
 		b = map & 1;
 		map >>>= 1;
-		X10.debug("Byte at " + p + " is " + (b == 0 ? "address" : "function"));
+		X10.debug("Byte at " + p + " (" + X10.hex(z) + ") is " + (b == 0 ? "an address" : "a function"));
+		p++;
 		if (b == 0) {
-			s.append(Code.lookup(z >>> 4));
-			s.append((Code.lookup(z & 0xf).toString().charAt(0) - 'A' + 1) & 0xff);
+			s.append((char)_lookup[z >>> 4]);
+			s.append(_lookup[z & 0xf] - '@');
 			s.append(" ");
 			continue;
 		}
@@ -292,7 +294,7 @@ private boolean parse_state(int n)
 	s.append(pad(_buf[2]));
 	s.append(" (sanity check: ");
 	s.append(calendar.getTime());
-	String house = Code.lookup((_buf[7] >>> 4) & 0xf).toString();
+	char house = (char)_lookup[_buf[7] >>> 4];
 	s.append(")\n\n\t");
 	int addr = (_buf[9] << 8 | _buf[8] & 0xff) & 0xffff;
 	int off = (_buf[11] << 8 | _buf[10] & 0xff) & 0xffff;
@@ -301,7 +303,7 @@ private boolean parse_state(int n)
 	StringBuilder b = new StringBuilder("\n");
 	int mask;
 	for (i = 0; i < 16; i++) {
-		mask = 1 << Code.find(i).ordinal();
+		mask = 1 << _codes[i];
 		s.append((addr & mask) != 0 ? "[" : "");
 		s.append(house);
 		s.append(i + 1);
@@ -317,7 +319,7 @@ private boolean parse_state(int n)
 
 private boolean cmd(Command c)
 {
-	int house = c.houseCode();
+	int house = _codes[c.house()];
 	int[] units = c.units();
 	if (units != null)
 		for (int i = 0; i < units.length; i++)
@@ -342,7 +344,7 @@ private boolean sys_cmd(Command c)
 	case RING_ENABLE:
 		return sys_cmd(CMD_RING_ENABLE);
 	case CLOCK_SET:
-		return set_clock(c.houseCode(), 0);
+		return set_clock(_codes[c.house()], 0);
 	}
 	X10.warn("Command " + c.cmd() + " not implemented");
 	return false;
@@ -456,7 +458,7 @@ public void run()
 			break;
 		case ST_POWER_OUTAGE:
 			X10.info("Interface reports power outage");
-			set_clock(HOUSE.ordinal(), 0);
+			set_clock(_codes[HOUSE], 0);
 		}
 		command = getCommand();
 		if (command == null)

@@ -44,7 +44,7 @@ private Command parse(String s)
 	case SYSTEM_STATE:
 	case RING_ENABLE:
 	case RING_DISABLE:
-		return new Command(command, null);
+		return new Command(command, -1);
 	}
 	if (tokens.size() < 2) {
 		X10.err("Not enough parameters: " + s);
@@ -52,7 +52,7 @@ private Command parse(String s)
 	}
 	int dim = 0;
 	int token = 1;
-	Code house;
+	int house;
 	if (command == Cmd.LOG_LEVEL) {
 		dim = number(tokens.get(token));
 		if (dim >= 0)
@@ -75,7 +75,7 @@ private Command parse(String s)
 		}
 	}
 	house = house(tokens.get(token++).toUpperCase(Locale.US));
-	if (house == null)
+	if (house == -1)
 		return null;
 	if (!command.need_addr())
 		return new Command(command, house);
@@ -130,18 +130,18 @@ private int number(String s)
 	}
 }
 
-private Code house(String s)
+private int house(String s)
 {
 	if (s.length() != 1) {
 		X10.err("Invalid house code '" + s + "'");
-		return null;
+		return -1;
 	}
 	char c = s.charAt(0);
 	if (c < 'A' || c > 'P') {
 		X10.err("Invalid house code '" + c + "'");
-		return null;
+		return -1;
 	}
-	return Code.valueOf(s);
+	return c - 'A';
 }
 
 private Cmd command(String s)
