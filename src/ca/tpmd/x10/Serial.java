@@ -22,6 +22,7 @@ private static final int RETRIES = 3;
 
 private static final int ST_POWER_OUTAGE = 0xa5;
 private static final int ST_HAVE_DATA = 0x5a;
+private static final int ST_RAN_MACRO = 0x5b;
 private static final int ST_READY = 0x55;
 
 private static final int CMD_SEND = 0xc3;
@@ -130,7 +131,9 @@ private boolean command(int n, int d)
 	int check = _sbuf[n];
 	int k = 4 + (n << 3);
 	do {
-		if ((_buf[0] & 0xff) == ST_HAVE_DATA) {
+		switch (_buf[0] & 0xff) {
+		case ST_HAVE_DATA:
+		case ST_RAN_MACRO:
 			X10.info("Interface has data, aborting command");
 			return false;
 		}
@@ -257,6 +260,18 @@ private void parse_status(int n)
 	X10.info(s.toString());
 }
 
+private boolean parse_macro(int n)
+{
+	if (n != 2) {
+		X10.warn("Expected 2 bytes, got " + n + " bytes");
+		return false;
+	}
+	int addr = ((_buf[0] & 0x07) << 8 | _buf[1] & 0xff) & 0xffff;
+	String s = (_buf[0] & 0x70) == 0 ? "timer" : "trigger";
+	X10.info("Executed macro at " + addr + ", started by " + s);
+	return true;
+}
+
 private boolean parse_state(int n)
 {
 	if (n != 14) {
@@ -272,6 +287,8 @@ private boolean parse_state(int n)
 	s.append("\n\tMinutes on battery power: ");
 	z = (_buf[1] << 8 | _buf[0] & 0xff) & 0xffff;
 	s.append(z == 0xffff ? "unknown - batteries dead?" : z);
+	if (z != 0xffff && z > 60 * 24 * 3)
+		s.append(" - replace batteries soon");
 	z = _buf[5] & 0xff | _buf[6] & 0x80;
 	Calendar calendar = Calendar.getInstance();
         calendar.set(Calendar.DAY_OF_YEAR, z);
@@ -322,7 +339,7 @@ private boolean cmd(Command c)
 		for (int i = 0; i < units.length; i++)
 			if (!address(house, _codes[units[i] - 1]))
 				return false;
-	return function(house, c.dim(), c.cmdCode());
+	return c.cmdCode() > 15 ? true : function(house, c.dim(), c.cmdCode());
 }
 
 private static final String pad(int n)
@@ -452,6 +469,10 @@ public void run()
 			send(CMD_SEND, DELAY);
 			parse_status(listen(true));
 			X10.info("Status parsed in " + time(t));
+			break;
+		case ST_RAN_MACRO:
+			send(CMD_SEND, DELAY);
+			listen(true);
 			break;
 		case ST_POWER_OUTAGE:
 			X10.info("Interface reports power outage");

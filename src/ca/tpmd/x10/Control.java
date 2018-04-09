@@ -64,7 +64,7 @@ private Command parse(String s)
 		return null;
 	}
 	if (command.need_dim()) {
-		if (tokens.size() < 4) {
+		if (tokens.size() < 3) {
 			X10.err("Not enough parameters for " + command + ": " + s);
 			return null;
 		}
@@ -79,14 +79,9 @@ private Command parse(String s)
 	house = house(tokens.get(token++).toUpperCase(Locale.US));
 	if (house == -1)
 		return null;
-	if (!command.need_addr())
-		return new Command(command, house);
-	if (tokens.size() == token) {
-		X10.warn("Need at least one unit for " + command);
-		return null;
-	}
-	int[] units = new int[tokens.size() - token];
-	int n, k = 0;
+	int n = tokens.size() - token;
+	int[] units = n == 0 ? null : new int[tokens.size() - token];
+	int k = 0;
 	while (token < tokens.size()) {
 		n = number(tokens.get(token++));
 		if (n == -1)
@@ -188,6 +183,10 @@ private Cmd command(String s)
 	case "status-request":
 	case "status_request":
 		return Cmd.STATUS_REQ;
+	case "a":
+	case "addr":
+	case "address":
+		return Cmd.ADDRESS;
 	case "er":
 		return Cmd.RING_ENABLE;
 	case "dr":
