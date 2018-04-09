@@ -79,9 +79,12 @@ private Command parse(String s)
 	house = house(tokens.get(token++).toUpperCase(Locale.US));
 	if (house == -1)
 		return null;
-	int n = tokens.size() - token;
-	int[] units = n == 0 ? null : new int[tokens.size() - token];
-	int k = 0;
+	if (tokens.size() == token && command.need_addr())  {
+		X10.warn("Need at least one unit for " + command);
+		return null;
+	}
+	int[] units = tokens.size() == token ? null : new int[tokens.size() - token];
+	int n, k = 0;
 	while (token < tokens.size()) {
 		n = number(tokens.get(token++));
 		if (n == -1)
