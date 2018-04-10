@@ -41,7 +41,7 @@ So the total overhead incurred for each address/function frame is 8ms delay due 
 
 I noticed something peculiar about the 'dim level' sent to the interface - if 0, dim and bright commands would emit two frames; if 1, it'll emit just one! After that, the number of commands matches the dim level, so 2 -> 2, 3 -> 3 and so on.
 
-Emitting `A1 DIM 1` commands in succession dims the light by a very small amount, and 200+ commands are needed to turn off the light completely. I think this is what's called 'micro-dimming'. Turns out you can do 'micro-addressing' and 'micro-functions' as well. Setting dim level to 1 for address results in CM11a emitting just a single 11 bit address frame; ditto for functions. This cuts the time needed for the actual X10 commands in half (11 bits instead of 22). In effect, 'dim level' is interpreted by the CM11a as the number of times each frame needs to be repeated, with 0 being special case meaning 'twice' (or perhaps 'twice with gap').
+Emitting `A1 DIM 1` commands in succession dims the light by a very small amount, and 200+ commands are needed to turn off the light completely. I think this is what's called 'micro-dimming'. Turns out you can do 'micro-addressing' and 'micro-functions' as well. Setting dim level to 1 for address results in CM11a emitting just a single 11 bit address frame; ditto for functions. This cuts the time needed for the actual X10 commands in half (11 bits instead of 22). In effect, 'dim level' is interpreted by the CM11a as the number of times each frame needs to be repeated, with 0 being special case meaning 'twice'.
 
 Here is the same sequence of events for `A ALL_OFF` command, this time using the non-spec single frames:
 ```
@@ -59,8 +59,8 @@ This is repeated twice for `A1 A ON` (516ms), thrice for `A2 A3 A ON` (774ms) an
 Funnily enough, this worked and is rock-solid in my setup - all of the modules I have react to single frame commands as expected. Now, that means we can pump out commands 40% faster:
 ```
                         single frames           double frames (spec)
-'A1 ON; A3 OFF          1032ms                  1768ms
-'A1 A2 ON; A3 A4 OFF'   1548ms                  2652ms
+A1 ON; A3 OFF           1032ms                  1768ms
+A1 A2 ON; A3 A4 OFF     1548ms                  2652ms
 ```
 Note that second command with single frames is faster than first with double frames!
 
