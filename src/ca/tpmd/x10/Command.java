@@ -8,9 +8,9 @@ private final int _dim;
 private final int _house;
 private final int[] _units;
 
-Command(Cmd c, int house)
+Command(Cmd c)
 {
-	this(c, house, null, 0);
+	this(c, -1, null, 0);
 }
 
 Command(Cmd c, int house, int[] units, int dim)

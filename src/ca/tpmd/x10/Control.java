@@ -57,7 +57,7 @@ private Command parse(String s)
 	case SYSTEM_STATE:
 	case RING_ENABLE:
 	case RING_DISABLE:
-		return new Command(command, -1);
+		return new Command(command);
 	}
 	if (tokens.size() < 2) {
 		X10.err("Not enough parameters: " + s);
