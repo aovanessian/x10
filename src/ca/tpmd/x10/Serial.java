@@ -30,7 +30,7 @@ private static final int CMD_STATE = 0x8b;
 private static final int CMD_CLOCK = 0x9b;
 private static final int CMD_RING_DISABLE = 0xdb;
 private static final int CMD_RING_ENABLE = 0xeb;
-private static final int CMD_DL_EEPROM = 0xfb;
+private static final int CMD_EEPROM_DL = 0xfb;
 
 public static synchronized Serial create(String name)
 {
@@ -114,7 +114,7 @@ private int listen(boolean delay)
 	}
 	int n = _port.readBytes(_buf, delay ? _port.bytesAvailable() : 1);
 	if (n != 0)
-		X10.debug("Got  " + X10.hex(_buf, n) + " (checksum: " + X10.hex(checksum(_buf, 0, n)) + ")");
+		X10.debug("got  " + X10.hex(_buf, n) + " (checksum: " + X10.hex(checksum(_buf, 0, n)) + ")");
 	return n;
 }
 
@@ -150,17 +150,17 @@ private void send_buf(int n, int d)
 {
 	_port.writeBytes(_sbuf, n);
 	long a = time() + d;
-	X10.debug("Sent " + X10.hex(_sbuf, n) + " (checksum: " + X10.hex(_sbuf[n]) + ")");
+	X10.debug("sent " + X10.hex(_sbuf, n) + " (checksum: " + X10.hex(_sbuf[n]) + ")");
 	int s = d;
 	X10.debug("will sleep for " + d + "ms");
 	for (;;) {
 		sleep(s);
-		if (_port.bytesAvailable() > 0) { // got data
+		if (_port.bytesAvailable() > 0) {
 			X10.debug("received data");
 			return;
 		}
 		n = (int)(a - time());
-		if (n <= 0) { // timed out
+		if (n <= 0) {
 			X10.debug("wait() timed out");
 			return;
 		}
@@ -170,7 +170,7 @@ private void send_buf(int n, int d)
 
 private boolean address(int house, int unit)
 {
-	X10.debug("Addressing " + house(house) + unit(unit));
+	X10.debug("addressing " + house(house) + unit(unit));
 	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | unit);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -179,7 +179,7 @@ private boolean address(int house, int unit)
 
 private boolean function(int house, int dim, int command)
 {
-	X10.debug("House " + house(house) + ", function " + command + ", dim " + dim);
+	X10.debug("house " + house(house) + ", function " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -218,7 +218,7 @@ private void parse_status(int n)
 		X10.warn("Truncated status: " + n + " out of " + k + " bytes available");
 		return;
 	}
-	X10.debug("Got " + k + " bytes to parse");
+	X10.debug("got " + k + " bytes to parse");
 	int map = _buf[1] & 0xff;
 	int p = 2;
 	int b;
@@ -230,7 +230,7 @@ private void parse_status(int n)
 		z = _buf[p] & 0xff;
 		b = map & 1;
 		map >>>= 1;
-		X10.debug("Byte at " + p + " (" + X10.hex(z) + ") is " + (b == 0 ? "an address" : "a function"));
+		X10.debug("byte at " + p + " (" + X10.hex(z) + ") is " + (b == 0 ? "an address" : "a function"));
 		p++;
 		if (b == 0) {
 			s.append(house(z >>> 4));
@@ -275,7 +275,7 @@ private boolean parse_macro(int n)
 		X10.warn("Expected 2 bytes, got " + n + " bytes");
 		return false;
 	}
-	int addr = ((_buf[0] & 0x07) << 8 | _buf[1] & 0xff) & 0xffff;
+	int addr = ((_buf[0] & 0x03) << 8 | _buf[1] & 0xff) & 0xffff;
 	String s = (_buf[0] & 0x70) == 0 ? "timer" : "trigger";
 	X10.info("Executed macro at " + addr + ", started by " + s);
 	return true;
@@ -368,6 +368,8 @@ private boolean sys_cmd(Command c)
 		return sys_cmd(CMD_RING_ENABLE);
 	case CLOCK_SET:
 		return set_clock(_codes[c.house()], 0);
+	case MACROS_ERASE:
+		return erase_macros();
 	}
 	X10.warn("Command " + c.cmd() + " not implemented");
 	return false;
@@ -377,6 +379,27 @@ private boolean sys_cmd(int cmd)
 {
 	_sbuf[0] = _sbuf[1] = (byte)cmd;
 	return command(1, DELAY);
+}
+
+private boolean erase_macros()
+{
+	/* 1024 bytes
+		2	triggers offset (9 * timers + 3)
+		9*n	timers (9 bytes each)
+		1	0xff
+		3*m	triggers (3 bytes each)
+		2	0xff
+		...	macros
+	*/
+	int offset = 3;
+	_sbuf[0] = (byte)CMD_EEPROM_DL;
+	_sbuf[1] = _sbuf[2] = 0;		// eeprom offset
+	_sbuf[3] = (byte)(offset >>> 8);	// triggers offset
+	_sbuf[4] = (byte)(offset & 0xff);
+	for (int i = 5; i < 20; i++)
+		_sbuf[i] = (byte)0xff;
+	_sbuf[19] = (byte)checksum(_sbuf, 1, 19);
+	return command(19, 2000);
 }
 
 private boolean set_clock(int house, int clear)
@@ -475,7 +498,7 @@ public void run()
 			sleep(1200); // wait for 'power out' message
 			continue;
 		case ST_HAVE_DATA:
-			X10.debug("Interface has data for us");
+			X10.debug("interface has data for us");
 			do {
 				send(CMD_SEND, DELAY);
 				_buf[0] = 0;

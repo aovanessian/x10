@@ -57,6 +57,7 @@ private Command parse(String s)
 	case SYSTEM_STATE:
 	case RING_ENABLE:
 	case RING_DISABLE:
+	case MACROS_ERASE:
 		return new Command(command);
 	}
 	if (tokens.size() < 2) {
@@ -127,7 +128,7 @@ private ArrayList<String> tokenize(String s)
 	if (b < tmp.length)
 		result.add(s.substring(b, tmp.length));
 	for (i = 0; i < result.size(); i++)
-		X10.debug("Command token: '" + result.get(i) + "'");
+		X10.debug("command token: '" + result.get(i) + "'");
 	return result;
 }
 
@@ -205,6 +206,8 @@ private Cmd command(String s)
 		return Cmd.RING_ENABLE;
 	case "dr":
 		return Cmd.RING_DISABLE;
+	case "erase_macros":
+		return Cmd.MACROS_ERASE;
 	case "clock":
 		return Cmd.CLOCK_SET;
 	case "sys":

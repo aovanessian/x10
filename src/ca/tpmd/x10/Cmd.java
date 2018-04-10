@@ -23,6 +23,7 @@ ADDRESS			( "address unit(s)"),
 SYSTEM_STATE		("system state"),
 RING_ENABLE		("enable serial ring"),
 RING_DISABLE		("disable serial ring"),
+MACROS_ERASE		("erase eeprom macros"),
 CLOCK_SET		("set interface clock"),
 LOG_LEVEL		("log level"),
 EXIT			("exit");
