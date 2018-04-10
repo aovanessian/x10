@@ -29,16 +29,27 @@ private Control(Serial s, InputStream in)
 
 private Command parse(String s)
 {
-	if (s.startsWith("#"))
-		return null;
 	ArrayList<String> tokens = tokenize(s);
 	if (tokens.size() == 0) {
-		X10.info("Empty command, repeating previous: " + _previous);
+		X10.verbose("Empty command");
+		return null;
+	}
+	String first = tokens.get(0);
+	if (first.startsWith("#")) {
+		X10.verbose("Comment: " + s);
+		return null;
+	}
+	if (first.equals(".")) {
+		if (tokens.size() > 1) {
+			X10.err("Malformed command: " + s);
+			return null;
+		}
+		X10.info("Repeating previous: " + _previous);
 		return _previous;
 	}
-	Cmd command = command(tokens.get(0));
+	Cmd command = command(first);
 	if (command == null) {
-		X10.err("Not a valid command: " + tokens.get(0));
+		X10.err("Not a valid command: " + first);
 		return null;
 	}
 	switch (command) {
@@ -79,8 +90,8 @@ private Command parse(String s)
 	house = house(tokens.get(token++).toUpperCase(Locale.US));
 	if (house == -1)
 		return null;
-	if (tokens.size() == token && command.need_addr())  {
-		X10.warn("Need at least one unit for " + command);
+	if (command.need_addr() && tokens.size() == token)  {
+		X10.err("Need at least one unit for " + command);
 		return null;
 	}
 	int[] units = tokens.size() == token ? null : new int[tokens.size() - token];
