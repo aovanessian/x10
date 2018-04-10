@@ -1,6 +1,6 @@
 package ca.tpmd.x10;
 
-public final class Command
+final class Command
 {
 
 private final Cmd _command;
@@ -8,44 +8,12 @@ private final int _dim;
 private final int _house;
 private final int[] _units;
 
-public Command(Cmd c, int house)
+Command(Cmd c, int house)
 {
 	this(c, house, null, 0);
 }
 
-public Command(Cmd c, int house, int unit)
-{
-	this(c, house, unit, 0);
-	if (c.need_dim())
-		throw new IllegalArgumentException(c.label() + ": need dim level");
-}
-
-public Command(Cmd c, int house, int unit, int dim)
-{
-	if (unit < 1 || unit > 16)
-		throw new IllegalArgumentException("Unit id outside allowed range: " + unit);
-	if (dim < 0 || dim > 22)
-		throw new IllegalArgumentException("Dim level outside allowed range: " + dim);
-	int[] units = {unit};
-	_command = c;
-	_house = house;
-	_units = c.need_addr() ? units : null;
-	_dim = c.need_dim() ? dim : 1;
-	if (!c.need_addr())
-		X10.info(c.label() + ": superfluous address");
-	if (!c.need_dim() && dim != 0)
-		X10.info(c.label() + ": superfluous dim level");
-
-}
-
-public Command(Cmd c, int house, int[] units)
-{
-	this(c, house, units, 0);
-	if (c.need_dim())
-		throw new IllegalArgumentException(c.label() + ": need dim level");
-}
-
-public Command(Cmd c, int house, int[] units, int dim)
+Command(Cmd c, int house, int[] units, int dim)
 {
 	if (c.need_addr()) {
 		if (units == null)
@@ -53,56 +21,52 @@ public Command(Cmd c, int house, int[] units, int dim)
 		for (int i = 0; i < units.length; i++)
 			if (units[i] < 1 || units[i] > 16)
 				throw new IllegalArgumentException("Unit id outside allowed range: " + units[i]);
-	} else if (units != null) {
-		X10.info(c.label() + ": superfluous address");
 	}
 
 	if (dim < 0 || dim > 22)
 		throw new IllegalArgumentException("Dim level outside allowed range: " + dim);
 	_command = c;
 	_house = house;
-	_units = c.need_addr() ? units : null;
+	_units = units;
 	_dim = c.need_dim() ? dim : 1;
-	if (!c.need_dim() && dim != 0)
-		X10.info(c.label() + ": superfluous dim level");
 }
 
-public Cmd cmd()
+Cmd cmd()
 {
 	return _command;
 }
 
-public String cmdLabel()
+String cmdLabel()
 {
 	return _command.label();
 }
 
-public int cmdCode()
+int cmdCode()
 {
 	return _command.ordinal();
 }
 
-public boolean cmdSystem()
+boolean cmdSystem()
 {
 	return _command.sys_cmd();
 }
 
-public boolean exit()
+boolean exit()
 {
 	return _command == Cmd.EXIT;
 }
 
-public int house()
+int house()
 {
 	return _house;
 }
 
-public int[] units()
+int[] units()
 {
 	return _units;
 }
 
-public int dim()
+int dim()
 {
 	return _dim;
 }
