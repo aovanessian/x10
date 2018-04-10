@@ -76,27 +76,27 @@ public static final void log(int l, String s)
 
 static final String hex(int n)
 {
-        int c = n & 0xff;
-        StringBuilder result = new StringBuilder(4);
-        result.append("0x");
-        result.append(_hex[c >>> 4]);
-        result.append(_hex[c & 0xf]);
-        return result.toString();
+	int c = n & 0xff;
+	StringBuilder result = new StringBuilder(4);
+	result.append("0x");
+	result.append(_hex[c >>> 4]);
+	result.append(_hex[c & 0xf]);
+	return result.toString();
 }
 
 static final String hex(byte[] buf, int n)
 {
 	if (n <= 0)
 		return "";
-        int c;
-        StringBuilder result = new StringBuilder(n * 5);
-        for (int i = 0; i < n; i++) {
-                c = buf[i] & 0xff;
-                result.append(" 0x");
-                result.append(_hex[c >>> 4]);
-                result.append(_hex[c & 0xf]);
-        }
-        return result.toString();
+	int c;
+	StringBuilder result = new StringBuilder(n * 5);
+	for (int i = 0; i < n; i++) {
+		c = buf[i] & 0xff;
+		result.append(" 0x");
+		result.append(_hex[c >>> 4]);
+		result.append(_hex[c & 0xf]);
+	}
+	return result.toString();
 }
 
 public static void main(String[] args)

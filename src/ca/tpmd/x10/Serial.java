@@ -300,7 +300,7 @@ private boolean parse_state(int n)
 		s.append(" - replace batteries soon");
 	z = _buf[5] & 0xff | _buf[6] & 0x80;
 	Calendar calendar = Calendar.getInstance();
-        calendar.set(Calendar.DAY_OF_YEAR, z);
+	calendar.set(Calendar.DAY_OF_YEAR, z);
 	s.append("\n\tDay of year: ");
 	s.append(z);
 	s.append(", ");
