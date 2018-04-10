@@ -97,19 +97,11 @@ private static synchronized void teardown()
 	_serial = null;
 }
 
-private static String device_string(int house, int unit)
-{
-	StringBuilder result = new StringBuilder(2);
-	result.append((char)(_lookup[house]));
-	result.append(_lookup[unit] - '@');
-	return result.toString();
-}
-
 private static int checksum(byte[] buf, int s, int n)
 {
 	int z = 0;
-	for (int i = s; i < n; i++)
-		z += buf[i];
+	while (n-- > s)
+		z += buf[n];
 	return z & 0xff;
 }
 
@@ -120,7 +112,7 @@ private int listen(boolean delay)
 		if (_port.bytesAvailable() > 1) // yep, it's more than one
 			delay(27); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
 	}
-	int n = _port.readBytes(_buf, _port.bytesAvailable());
+	int n = _port.readBytes(_buf, delay ? _port.bytesAvailable() : 1);
 	if (n != 0)
 		X10.debug("Got  " + X10.hex(_buf, n) + " (checksum: " + X10.hex(checksum(_buf, 0, n)) + ")");
 	return n;
@@ -178,7 +170,7 @@ private void send_buf(int n, int d)
 
 private boolean address(int house, int unit)
 {
-	X10.debug("Addressing " + device_string(house, unit));
+	X10.debug("Addressing " + house(house) + unit(unit));
 	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | unit);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -187,7 +179,7 @@ private boolean address(int house, int unit)
 
 private boolean function(int house, int dim, int command)
 {
-	X10.debug("Function " + command + ", dim " + dim);
+	X10.debug("House " + house(house) + ", function " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -202,6 +194,16 @@ private static long time()
 private static String time(long t)
 {
 	return (time() - t) + "ms";
+}
+
+private static char house(int i)
+{
+	return (char)_lookup[i];
+}
+
+private static int unit(int i)
+{
+	return (_lookup[i] - '@');
 }
 
 private void parse_status(int n)
@@ -221,18 +223,25 @@ private void parse_status(int n)
 	int p = 2;
 	int b;
 	int z;
+	boolean addr_seen = false;
 	StringBuilder s = new StringBuilder();
 	while (p < k) {
+		addr_seen = false;
 		z = _buf[p] & 0xff;
 		b = map & 1;
 		map >>>= 1;
 		X10.debug("Byte at " + p + " (" + X10.hex(z) + ") is " + (b == 0 ? "an address" : "a function"));
 		p++;
 		if (b == 0) {
-			s.append((char)_lookup[z >>> 4]);
-			s.append(_lookup[z & 0xf] - '@');
+			s.append(house(z >>> 4));
+			s.append(unit(z & 0xf));
 			s.append(" ");
+			addr_seen = true;
 			continue;
+		}
+		if (!addr_seen) {
+			s.append(house(z >>> 4));
+			s.append(" ");
 		}
 		Cmd func = Cmd.lookup(z & 0xf);
 		s.append(func.label());
@@ -308,7 +317,7 @@ private boolean parse_state(int n)
 	s.append(pad(_buf[2]));
 	s.append(" (sanity check: ");
 	s.append(calendar.getTime());
-	char house = (char)_lookup[_buf[7] >>> 4];
+	char house = house(_buf[7] >>> 4);
 	s.append(")\n\n\t");
 	int addr = (_buf[9] << 8 | _buf[8] & 0xff) & 0xffff;
 	int off = (_buf[11] << 8 | _buf[10] & 0xff) & 0xffff;
@@ -454,6 +463,7 @@ public void run()
 {
 	int r = RETRIES;
 	long t;
+	int n;
 	Command command;
 	for (;;) {
 		_buf[0] = 0;
@@ -466,17 +476,20 @@ public void run()
 			continue;
 		case ST_HAVE_DATA:
 			X10.debug("Interface has data for us");
-			send(CMD_SEND, DELAY);
-			parse_status(listen(true));
+			do {
+				send(CMD_SEND, DELAY);
+				_buf[0] = 0;
+				n = listen(true);
+			} while (_buf[0] == ST_HAVE_DATA);
+			parse_status(n);
 			X10.info("Status parsed in " + time(t));
 			break;
 		case ST_RAN_MACRO:
-			send(CMD_SEND, DELAY);
-			listen(true);
+			parse_macro(listen(true));
 			break;
 		case ST_POWER_OUTAGE:
 			X10.info("Interface reports power outage");
-			set_clock(_codes[HOUSE], 0);
+			send(CMD_CLOCK, 2000); // do not set clock again, just acknowledge message
 		}
 		command = getCommand();
 		if (command == null)
