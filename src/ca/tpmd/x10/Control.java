@@ -5,6 +5,7 @@ import java.util.Scanner;
 import java.util.NoSuchElementException;
 import java.util.Locale;
 import java.io.InputStream;
+import ca.tpmd.x10.eeprom.Schedule;
 
 public final class Control implements Runnable
 {
@@ -12,7 +13,7 @@ public final class Control implements Runnable
 private static Serial _serial;
 private static Control _control = null;
 private static InputStream _in;
-private Command _previous = null;
+private static Command _previous = null;
 
 public static synchronized Control create(Serial s, InputStream in)
 {
@@ -27,7 +28,7 @@ private Control(Serial s, InputStream in)
 	_in = in;
 }
 
-private Command parse(String s)
+private static Command parse(String s)
 {
 	ArrayList<String> tokens = tokenize(s);
 	if (tokens.size() == 0) {
@@ -53,11 +54,14 @@ private Command parse(String s)
 		return null;
 	}
 	switch (command) {
+	case SCHEDULE:
+		tokens.remove(0);
+		return Schedule.parse(tokens);
 	case EXIT:
 	case SYSTEM_STATE:
 	case RING_ENABLE:
 	case RING_DISABLE:
-	case MACROS_ERASE:
+	case EEPROM_ERASE:
 		return new Command(command);
 	}
 	if (tokens.size() < 2) {
@@ -110,7 +114,7 @@ private Command parse(String s)
 	return new Command(command, house, units, dim);
 }
 
-private ArrayList<String> tokenize(String s)
+public static ArrayList<String> tokenize(String s)
 {
 	ArrayList<String> result = new ArrayList<String>();
 	char[] tmp = s.toCharArray();
@@ -132,7 +136,7 @@ private ArrayList<String> tokenize(String s)
 	return result;
 }
 
-private int number(String s)
+private static int number(String s)
 {
 	try {
 		return Integer.parseInt(s);
@@ -142,7 +146,7 @@ private int number(String s)
 	}
 }
 
-private int house(String s)
+private static int house(String s)
 {
 	if (s.length() != 1) {
 		X10.err("Invalid house code '" + s + "'");
@@ -156,7 +160,7 @@ private int house(String s)
 	return c - 'A';
 }
 
-private Cmd command(String s)
+public static Cmd command(String s)
 {
 	switch (s.toLowerCase(Locale.US)) {
 	case "ao":
@@ -207,13 +211,16 @@ private Cmd command(String s)
 	case "dr":
 		return Cmd.RING_DISABLE;
 	case "erase_macros":
-		return Cmd.MACROS_ERASE;
+		return Cmd.EEPROM_ERASE;
 	case "clock":
 		return Cmd.CLOCK_SET;
 	case "sys":
 	case "system":
 	case "state":
 		return Cmd.SYSTEM_STATE;
+	case "schedule":
+	case "sc":
+		return Cmd.SCHEDULE;
 	case "q":
 	case "quit":
 	case "exit":
