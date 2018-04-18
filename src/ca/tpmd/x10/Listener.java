@@ -2,12 +2,12 @@ package ca.tpmd.x10;
 
 import com.fazecast.jSerialComm.*;
 
-public final class Listener implements SerialPortDataListener
+final class Listener implements SerialPortDataListener
 {
 
 Serial comm;
 
-public Listener(Serial s)
+Listener(Serial s)
 {
 	comm = s;
 }

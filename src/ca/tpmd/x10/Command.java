@@ -15,7 +15,7 @@ public Command(Cmd c)
 	this(c, -1, null, 0);
 }
 
-public Command(Cmd c, int house, int[] units, int dim)
+Command(Cmd c, int house, int[] units, int dim)
 {
 	if (c.need_addr()) {
 		if (units == null)

@@ -35,7 +35,7 @@ private final String label;
 private final boolean eeprom;
 private static final Cmd[] values = values();
 
-Cmd(boolean ee, String l)
+private Cmd(boolean ee, String l)
 {
 	eeprom = ee;
 	label = l;
@@ -94,7 +94,7 @@ public boolean need_dim()
 	return this == DIM || this == BRIGHT;
 }
 
-public String label()
+String label()
 {
 	return label;
 }

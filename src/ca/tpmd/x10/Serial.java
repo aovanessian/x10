@@ -4,7 +4,7 @@ import com.fazecast.jSerialComm.SerialPort;
 import java.util.Calendar;
 import java.util.ArrayList;
 
-public final class Serial implements Runnable
+final class Serial implements Runnable
 {
 
 private final static int HOUSE = 'O' - 'A';
@@ -30,7 +30,7 @@ private static final int CMD_RING_DISABLE = 0xdb;
 private static final int CMD_RING_ENABLE = 0xeb;
 private static final int CMD_EEPROM_DL = 0xfb;
 
-public static synchronized Serial create(String name)
+static synchronized Serial create(String name)
 {
 	if (_serial == null)
 		_serial = new Serial(name);
@@ -43,7 +43,7 @@ private Serial(String name)
 	setup();
 }
 
-public static final void list_ports()
+static final void list_ports()
 {
 	SerialPort[] ports = SerialPort.getCommPorts();
 	for (int i = 0; i < ports.length; i++)
@@ -66,7 +66,7 @@ synchronized void data_available()
 	notify();
 }
 
-public boolean test()
+boolean test()
 {
 	return true;//_port.isOpen();
 }

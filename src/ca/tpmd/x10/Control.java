@@ -15,7 +15,7 @@ private static Control _control = null;
 private static InputStream _in;
 private static Command _previous = null;
 
-public static synchronized Control create(Serial s, InputStream in)
+static synchronized Control create(Serial s, InputStream in)
 {
 	if (_control == null)
 		_control = new Control(s, in);
