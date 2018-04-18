@@ -1,0 +1,302 @@
+package ca.tpmd.x10.eeprom;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import ca.tpmd.x10.Cmd;
+import ca.tpmd.x10.Command;
+import ca.tpmd.x10.Control;
+import ca.tpmd.x10.X10;
+
+public final class Schedule
+{
+
+private final byte[] _eeprom = new byte[1024];
+private final String _conf;
+private final ArrayList<Trigger> _triggers;
+private final ArrayList<Timer> _timers;
+private final ArrayList<Macro> _macros;
+private final HashMap<String, Integer> _n2o;
+private final HashMap<Integer, String> _o2n;
+
+private static final String _image = "eeprom.bin";
+private static final String _xref = "xref.txt";
+
+private static Schedule _schedule;
+
+private Schedule(String filename)
+{
+	_conf = filename;
+	_triggers = new ArrayList<Trigger>();
+	_timers = new ArrayList<Timer>();
+	_macros = new ArrayList<Macro>();
+	_n2o = new HashMap<String, Integer>();
+	_o2n = new HashMap<Integer, String>();
+	_n2o.put("null", -1); // reserve 'null' macro name
+}
+
+static String next(ArrayList<String> tokens)
+{
+	if (tokens.size() != 0)
+		return tokens.remove(0);
+	throw new IllegalArgumentException("not enough parameters");
+}
+
+static int house(String s)
+{
+        if (s.length() != 1)
+                throw new IllegalArgumentException("invalid house code '" + s + "'");
+        char c = s.charAt(0);
+        if (c >= 'a')
+                c -= 32;
+        if (c < 'A' || c > 'P')
+                throw new IllegalArgumentException("invalid house code '" + s + "'");
+        return c;
+}
+
+static int number(String s, int min, int max)
+{
+        int n;
+        try {   
+                n = Integer.parseInt(s);
+        } catch (NumberFormatException x) {
+                throw new IllegalArgumentException("expecting number from " + min + " to " + max + ", got '" + s + "'");
+        }
+        if (n >= min && n <= max)
+                return n;
+        throw new IllegalArgumentException("number outside of allowed range [" + min + ".." + max + "]: " + n);
+}
+
+public static Command parse(ArrayList<String> tokens)
+{
+	if (tokens == null || tokens.size() == 0) {
+		X10.err("Bad schedule command");
+		return null;
+	}
+	byte[] tmp;
+	String token = next(tokens);
+	X10.debug("element: " + token);
+	switch (token) {
+	case "parse":
+	case "p":
+		try {
+			_schedule = new Schedule(next(tokens));
+			_schedule.parse();
+			_schedule.adjust();
+		} catch (IOException | IllegalArgumentException x) {
+			X10.err("schedule parse: " + x.getMessage());
+			_schedule = null;
+		}
+		break;
+	case "read":
+	case "r":
+		// read existing image
+		break;
+	case "write":
+	case "w":
+		if (_schedule == null) {
+			X10.err("schedule empty - 'read' or 'parse' first");
+			break;
+		}
+		return _schedule.image();
+	}
+	X10.debug("schedule command finished");
+	return null;
+}
+
+private final void adjust()
+{
+	if (_macros.size() == 0)
+		throw new IllegalArgumentException("no macros defined");
+	if (_timers.size() == 0 && _triggers.size() == 0)
+		throw new IllegalArgumentException("neither triggers nor timers defined");
+	X10.info("macros:\t\t" + _macros.size() + "\n\ttriggers:\t" + _triggers.size() + "\n\ttimers:\t\t" + _timers.size());
+	if (!_macros.get(_macros.size() - 1).name().equals("null")) {
+		_n2o.remove("null");
+		parse_line("macro null 0", -1); // add 'null' macro
+	}
+	// TODO
+	//	remove unused macros
+	//	remove duplicate triggers (same trigger, same macro)
+	//	remove duplicate timers
+	//
+	//	check for duplicated triggers (same trigger, different macros) - are these allowed?
+	//	check for timers set to the same day/date/time - are these allowed?
+	
+	// verify we have not exceeded 1024 bytes
+	int size_tr = _triggers.size() > 0 ? _triggers.size() * 3 + 2 : 0;
+	int size_ti = _timers.size() > 0 ? _timers.size() * 9 + 1 : 0;
+	int size_ma = 0;
+	for (int i = 0; i < _macros.size(); i++)
+		size_ma += _macros.get(i).size();
+	int size = size_ma + size_tr + size_ti + 2;
+	X10.debug("macros: " + size_ma + ", triggers: " + size_tr + ", timers: " + size_ti);
+	if (size > 1024)
+		throw new IllegalArgumentException("schedule is too large (" + size + " bytes)");
+	X10.info("schedule size: " + size + " bytes");
+}
+
+private final void parse() throws IOException
+{
+	File file = new File(_conf);
+	FileReader fileReader = new FileReader(file);
+	BufferedReader bufferedReader = new BufferedReader(fileReader);
+	String line;
+	int n = 0;
+	while ((line = bufferedReader.readLine()) != null)
+		parse_line(line, ++n);
+	X10.info("parsed " + n + " lines");
+	fileReader.close();
+}
+
+private static final void read_image(byte[] b, HashMap<Integer, String> o2n)
+{
+	if (b.length != 1024)
+		throw new IllegalArgumentException("Expecting 1024 bytes image, got " + b.length + "bytes");
+	byte[] tmp = new byte[3];
+	int n = (((b[0] & 0xff) << 8) | (b[1] & 0xff));
+	int lowest = 1022;
+	Trigger tr;
+	do {
+		if ((b[n] & 0xff) == 0xff && (b[n + 1] & 0xff) == 0xff)
+			break;
+		System.arraycopy(b, n, tmp, 0, tmp.length);
+		tr = new Trigger(tmp, o2n);
+		n += tmp.length;
+		if (lowest > tr.pointer())
+			lowest = tr.pointer();	
+		X10.debug(X10.hex(tmp, tmp.length));
+		X10.verbose(tr.toString());
+	} while (true);
+	tmp = new byte[9];
+	n = 2;
+	Timer ti;
+	do {
+		if ((b[n] & 0xff) == 0xff)
+			break;
+		System.arraycopy(b, n, tmp, 0, tmp.length);
+		ti = new Timer(tmp, o2n);
+		n += tmp.length;
+		if (lowest > ti.pointer())
+			lowest = ti.pointer();	
+		X10.debug(X10.hex(tmp, tmp.length));
+		X10.verbose(ti.toString());
+		
+	} while (true);
+	n = lowest;
+	tmp = new byte[1024 - n];
+	Macro m;
+	String name;
+	do {
+		System.arraycopy(b, n, tmp, 0, 1024 - n);
+		name = o2n.get(n);
+		m = new Macro(tmp, name);
+		n += m.size();
+		X10.debug(X10.hex(tmp, m.size()));
+		X10.verbose(m.toString());
+	} while (n < 1024);
+}
+
+private final Command image()
+{
+	int p = _eeprom.length;
+	byte[] tmp;
+	int e = _macros.size();
+	Macro m;
+	while (e-- > 0) {
+		m = _macros.get(e);
+		tmp = m.serialize();
+		p -= tmp.length;
+
+		System.arraycopy(tmp, 0, _eeprom, p, tmp.length);
+		_n2o.put(m.name(), p);
+		_o2n.put(p, m.name());
+	}
+	_eeprom[--p] = (byte)0xff; // triggers end marker
+	_eeprom[--p] = (byte)0xff;
+	e = _triggers.size();
+	Trigger tr;
+	while (e-- > 0) {
+		tr = _triggers.get(e);
+		tr.pointer(_n2o.get(tr.macro()));
+		tmp = tr.serialize();
+		p -= tmp.length;
+		System.arraycopy(tmp, 0, _eeprom, p, tmp.length);
+	}
+	_eeprom[0] = (byte)(p >>> 8);
+	_eeprom[1] = (byte)(p & 0xff);
+	int n = p;
+	p = 2;
+	Timer ti;
+	e = 0;
+	while (e < _timers.size()) {
+		ti = _timers.get(e);
+		ti.pointers(_n2o.get(ti.macro_start()), _n2o.get(ti.macro_end()));
+		tmp = ti.serialize();
+		System.arraycopy(tmp, 0, _eeprom, p, tmp.length);
+		e++;
+		p += tmp.length;
+	}
+	_eeprom[p++] = (byte)0xff; // timers end marker
+	X10.debug(X10.hex(_eeprom));
+	n -= p;
+	X10.info("free eeprom space: " + n + " bytes, enough for " + (n / 9) + " more timers");
+	Schedule.read_image(_eeprom, _o2n);
+	try {
+		FileOutputStream eeprom = new FileOutputStream(_image);
+		eeprom.write(_eeprom);
+		eeprom.close();
+	} catch (IOException x) {
+		X10.err("Error writing image/xref files: " + x.getMessage());
+		return null;
+	}
+	Command c = new Command(Cmd.EEPROM_WRITE);
+	c.setData(_eeprom);
+	return c;
+}
+
+private final void parse_line(String line, int n)
+{
+	ArrayList<String> tokens = Control.tokenize(line);
+	if (tokens.size() == 0) {
+		X10.debug("line " + n + ": empty line");
+		return;
+	}
+	if (tokens.get(0).charAt(0) == '#') {
+		X10.debug("line " + n + ": comment: " + line);
+		return;
+	}
+	byte[] tmp;
+	switch (next(tokens)) {
+	case "timer":
+		Timer ti = Timer.parse(tokens);
+		if (ti == null)
+			break;
+		X10.verbose(ti.toString());
+		_timers.add(ti);
+		break;
+	case "trigger":
+		Trigger tr = Trigger.parse(tokens);
+		if (tr == null)
+			break;
+		X10.verbose(tr.toString());
+		_triggers.add(tr);
+		break;
+	case "macro":
+		Macro ma = Macro.parse(tokens, _n2o);
+		if (ma == null)
+			break;
+		_macros.add(ma);
+		_n2o.put(ma.name(), -1);
+		X10.verbose(ma.toString());
+		break;
+	default:
+		X10.warn("line " + n + ": unknown schedule command: " + line);
+	}
+}
+
+}

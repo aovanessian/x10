@@ -12,8 +12,6 @@ private final static byte[] _buf = new byte[32]; // feeling generous here
 private final static byte[] _sbuf = new byte[32];
 private final String _name;
 private static SerialPort _port;
-private final static byte[] _codes  = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
-private final static byte[] _lookup = {'M', 'E', 'C', 'K', 'O', 'G', 'A', 'I', 'N', 'F', 'D', 'L', 'P', 'H', 'B', 'J'};
 private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
@@ -70,11 +68,7 @@ synchronized void data_available()
 
 public boolean test()
 {
-	if (!_port.isOpen()) {
-		X10.log(0, "Could not open port");
-		return false;
-	}
-	return true;
+	return true;//_port.isOpen();
 }
 
 private void setup()
@@ -89,8 +83,6 @@ private void setup()
 
 private static synchronized void teardown()
 {
-	if (_port == null)
-		return;
 	_port.closePort();
 	X10.debug(port_settings(_port));
 	_port = null;
@@ -122,6 +114,7 @@ private boolean command(int n, int d)
 {
 	int check = _sbuf[n];
 	int k = 4 + (n << 3);
+	//int k = n << 5;
 	do {
 		switch (_buf[0] & 0xff) {
 		case ST_HAVE_DATA:
@@ -170,7 +163,7 @@ private void send_buf(int n, int d)
 
 private boolean address(int house, int unit)
 {
-	X10.debug("addressing " + house(house) + unit(unit));
+	X10.debug("addressing " + X10.house(house) + X10.unit(unit));
 	_sbuf[0] = (byte)0xc;
 	_sbuf[1] = (byte)(house << 4 | unit);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -179,7 +172,7 @@ private boolean address(int house, int unit)
 
 private boolean function(int house, int dim, int command)
 {
-	X10.debug("house " + house(house) + ", function " + command + ", dim " + dim);
+	X10.debug("house " + X10.house(house) + ", function " + command + ", dim " + dim);
 	_sbuf[0] = (byte)((dim << 3) | 6);
 	_sbuf[1] = (byte)(house << 4 | command);
 	_sbuf[2] = (byte)checksum(_sbuf, 0, 2);
@@ -194,16 +187,6 @@ private static long time()
 private static String time(long t)
 {
 	return (time() - t) + "ms";
-}
-
-private static char house(int i)
-{
-	return (char)_lookup[i];
-}
-
-private static int unit(int i)
-{
-	return (_lookup[i] - '@');
 }
 
 private void parse_status(int n)
@@ -233,14 +216,14 @@ private void parse_status(int n)
 		X10.debug("byte at " + p + " (" + X10.hex(z) + ") is " + (b == 0 ? "an address" : "a function"));
 		p++;
 		if (b == 0) {
-			s.append(house(z >>> 4));
-			s.append(unit(z & 0xf));
+			s.append(X10.house(z >>> 4));
+			s.append(X10.unit(z & 0xf));
 			s.append(" ");
 			addr_seen = true;
 			continue;
 		}
 		if (!addr_seen) {
-			s.append(house(z >>> 4));
+			s.append(X10.house(z >>> 4));
 			s.append(" ");
 		}
 		Cmd func = Cmd.lookup(z & 0xf);
@@ -272,12 +255,18 @@ private void parse_status(int n)
 private boolean parse_macro(int n)
 {
 	if (n != 2) {
-		X10.warn("Expected 2 bytes, got " + n + " bytes");
+		X10.warn("Expected 2 bytes, got " + n + " bytes (" + X10.hex(_buf, n) + ")");
 		return false;
 	}
 	int addr = ((_buf[0] & 0x03) << 8 | _buf[1] & 0xff) & 0xffff;
-	String s = (_buf[0] & 0x70) == 0 ? "timer" : "trigger";
-	X10.info("Executed macro at " + addr + ", started by " + s);
+	StringBuilder s = new StringBuilder();
+	s.append("Raw data: ");
+	s.append(X10.hex(_buf, 2));
+	s.append("\n\tAddress: ");
+	s.append(addr);
+	s.append("\n\tStarted by ");
+	s.append((_buf[0] & 0x70) == 0 ? "timer" : "trigger");
+	X10.info(s.toString());
 	return true;
 }
 
@@ -294,7 +283,7 @@ private boolean parse_state(int n)
 	s.append("\n\tFirmware revision: ");
 	s.append(_buf[7] & 0xf);
 	s.append("\n\tMinutes on battery power: ");
-	z = (_buf[1] << 8 | _buf[0] & 0xff) & 0xffff;
+	z = ((_buf[1] & 0xff) << 8 | (_buf[0] & 0xff)) & 0xffff;
 	s.append(z == 0xffff ? "unknown - batteries dead?" : z);
 	if (z != 0xffff && z > 60 * 24 * 3)
 		s.append(" - replace batteries soon");
@@ -310,23 +299,23 @@ private boolean parse_state(int n)
 		i++;
 	s.append(_weekdays[i]);
 	s.append(" ");
-	s.append((_buf[4] << 1) + (_buf[3] / 60));
+	s.append(((_buf[4] & 0xff) << 1) + ((_buf[3] & 0xff) / 60));
 	s.append(":");
-	s.append(pad(_buf[3] % 60));
+	s.append(pad((_buf[3] & 0xff) % 60));
 	s.append(":");
-	s.append(pad(_buf[2]));
+	s.append(pad(_buf[2] & 0xff));
 	s.append(" (sanity check: ");
 	s.append(calendar.getTime());
-	char house = house(_buf[7] >>> 4);
+	char house = X10.house((_buf[7] & 0xff) >>> 4);
 	s.append(")\n\n\t");
-	int addr = (_buf[9] << 8 | _buf[8] & 0xff) & 0xffff;
-	int off = (_buf[11] << 8 | _buf[10] & 0xff) & 0xffff;
-	int dim = (_buf[13] << 8 | _buf[12] & 0xff) & 0xffff;
+	int addr = ((_buf[9] & 0xff) << 8 | _buf[8] & 0xff);
+	int off = ((_buf[11] & 0xff) << 8 | _buf[10] & 0xff);
+	int dim = ((_buf[13] & 0xff) << 8 | _buf[12] & 0xff);
 	StringBuilder a = new StringBuilder("\n");
 	StringBuilder b = new StringBuilder("\n");
 	int mask;
 	for (i = 0; i < 16; i++) {
-		mask = 1 << _codes[i];
+		mask = 1 << X10.code(i);
 		s.append((addr & mask) != 0 ? "[" : "");
 		s.append(house);
 		s.append(i + 1);
@@ -342,11 +331,11 @@ private boolean parse_state(int n)
 
 private boolean cmd(Command c)
 {
-	int house = _codes[c.house()];
+	int house = X10.code(c.house());
 	int[] units = c.units();
 	if (units != null)
 		for (int i = 0; i < units.length; i++)
-			if (!address(house, _codes[units[i] - 1]))
+			if (!address(house, X10.code((units[i] - 1))))
 				return false;
 	return c.cmdCode() > 15 ? true : function(house, c.dim(), c.cmdCode());
 }
@@ -367,9 +356,11 @@ private boolean sys_cmd(Command c)
 	case RING_ENABLE:
 		return sys_cmd(CMD_RING_ENABLE);
 	case CLOCK_SET:
-		return set_clock(_codes[c.house()], 0);
-	case MACROS_ERASE:
-		return erase_macros();
+		return set_clock(X10.code((c.house())), 0);
+	case EEPROM_ERASE:
+		return eeprom_erase();
+	case EEPROM_WRITE:
+		return eeprom_write(c.getData());
 	}
 	X10.warn("Command " + c.cmd() + " not implemented");
 	return false;
@@ -381,7 +372,70 @@ private boolean sys_cmd(int cmd)
 	return command(1, DELAY);
 }
 
-private boolean erase_macros()
+private boolean eeprom_write(byte[] data)
+{
+	/*
+	our eeprom data arrangement:
+
+	0x0000	offset to <triggers>	2 bytes, 'TTTT'
+	0x0002	<timers>		9 x number of timers
+	.
+	.	number of timers times 9
+	.
+	0x????	0xff			end of timers marker
+	.
+	.	<empty space>		= 1024 - (2 + 9 * timers + 1 + 3 * triggers + 2 + macros + 1)
+	.					if, say, there's no timers, single trigger and single-command standard code macro, empty
+	.					space will be 1012 bytes (two bytes in first page, 10 bytes in last page)
+	0xTTTT	<triggers>		3 x number of triggers
+	.
+	.	number of triggers times 3
+	.
+	0x????	0xff			end of triggers marker
+	.	0xff
+	.
+	.	<macros>		our macros go here
+	.
+	0x03fe	0x00			Our 'null' macro
+	0x03ff	0x00
+
+	*/
+
+	if (data.length != 1024) {
+		X10.err("Image length is " + data.length + ", should be 1024 bytes");
+		return false;
+	}
+	int n = 64, k, i;
+	boolean result = eeprom_erase();
+	boolean empty;
+	//_sbuf[0] = (byte)CMD_EEPROM_DL;
+	while (result == true && n-- > 0) {
+		k = n << 4;
+		empty = true;
+		for (i = k; i < k + 16; i++)
+			if (data[i] != 0) {
+				empty = false;
+				break;
+			}
+		if (empty) {
+			// taking advantage of the fact that CM11a jumps to the triggered macro and starts reading forward;
+			// since we put our macros at the end of the eeprom, we won't have to overwrite previous data as
+			// we have no way to jump in there.
+			X10.verbose("Block " + (n + 1) + " empty, skipping write");
+			continue;
+		}
+		System.arraycopy(data, k, _sbuf, 3, 16);
+		_sbuf[0] = (byte)CMD_EEPROM_DL;
+		_sbuf[1] = (byte)(n >>> 4);
+		_sbuf[2] = (byte)(k & 0xf0);
+		_sbuf[19] = (byte)checksum(_sbuf, 1, 19);
+		X10.verbose("Writing block " + (n + 1));
+		result = command(19, 2000);
+	}
+	return result;
+}
+
+private boolean eeprom_erase()
 {
 	/* 1024 bytes
 		2	triggers offset (9 * timers + 3)
@@ -391,11 +445,9 @@ private boolean erase_macros()
 		2	0xff
 		...	macros
 	*/
-	int offset = 3;
 	_sbuf[0] = (byte)CMD_EEPROM_DL;
-	_sbuf[1] = _sbuf[2] = 0;		// eeprom offset
-	_sbuf[3] = (byte)(offset >>> 8);	// triggers offset
-	_sbuf[4] = (byte)(offset & 0xff);
+	_sbuf[1] = _sbuf[2] = _sbuf[3] = 0;
+	_sbuf[4] = 2;
 	for (int i = 5; i < 20; i++)
 		_sbuf[i] = (byte)0xff;
 	_sbuf[19] = (byte)checksum(_sbuf, 1, 19);
@@ -508,6 +560,7 @@ public void run()
 			X10.info("Status parsed in " + time(t));
 			break;
 		case ST_RAN_MACRO:
+			delay(20);
 			parse_macro(listen(true));
 			break;
 		case ST_POWER_OUTAGE:

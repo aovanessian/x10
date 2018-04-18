@@ -1,6 +1,6 @@
 package ca.tpmd.x10;
 
-final class Command
+public final class Command
 {
 
 private final Cmd _command;
@@ -8,12 +8,14 @@ private final int _dim;
 private final int _house;
 private final int[] _units;
 
-Command(Cmd c)
+private byte[] _data = null;
+
+public Command(Cmd c)
 {
 	this(c, -1, null, 0);
 }
 
-Command(Cmd c, int house, int[] units, int dim)
+public Command(Cmd c, int house, int[] units, int dim)
 {
 	if (c.need_addr()) {
 		if (units == null)
@@ -29,6 +31,17 @@ Command(Cmd c, int house, int[] units, int dim)
 	_house = house;
 	_units = units;
 	_dim = c.need_dim() ? dim : 1;
+}
+
+public void setData(byte[] d)
+{
+	_data = new byte[d.length];
+	System.arraycopy(d, 0, _data, 0, d.length);
+}
+
+byte[] getData()
+{
+	return _data;
 }
 
 Cmd cmd()
