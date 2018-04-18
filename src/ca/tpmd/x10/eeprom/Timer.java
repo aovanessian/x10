@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import ca.tpmd.x10.X10;
 
-public final class Timer
+final class Timer
 {
 
 private final int _wd_mask;
@@ -38,7 +38,7 @@ private Timer(int wd_mask, int start_day, int start_time, boolean start_rnd, int
 	_line = line;
 }
 
-public Timer(byte[] b, HashMap<Integer, String> o2n)
+Timer(byte[] b, HashMap<Integer, String> o2n)
 {
 	if (b.length != SIZE)
 		throw new IllegalArgumentException("timer: got array of length " + b.length + ", expecting a " + SIZE + " byte array");
@@ -65,38 +65,38 @@ int line()
 	return _line;
 }
 
-public void pointers(int start, int end)
+void pointers(int start, int end)
 {
 	_ptr_start = start;
 	_ptr_end = end;
 }
 
-public int pointer()
+int pointer()
 {
 	return _ptr_start < _ptr_end ? _ptr_start : _ptr_end;
 }
 
-public int ptr_start()
+int ptr_start()
 {
 	return _ptr_start;
 }
 
-public int ptr_end()
+int ptr_end()
 {
 	return _ptr_end;
 }
 
-public String macro_start()
+String macro_start()
 {
 	return _macro_start;
 }
 
-public String macro_end()
+String macro_end()
 {
 	return _macro_end;
 }
 
-public byte[] serialize()
+byte[] serialize()
 {
 	if (_ptr_start == -1 || _ptr_end == -1) {
 		X10.err("timer " + toString() + ": macro pointers not set");
@@ -209,7 +209,7 @@ private static String time(int time, boolean rnd)
 	return s.toString();
 }
 
-public static Timer parse(ArrayList<String> tokens, int line)
+static Timer parse(ArrayList<String> tokens, int line)
 {
 	boolean rnd_start = false;
 	boolean rnd_end = false;

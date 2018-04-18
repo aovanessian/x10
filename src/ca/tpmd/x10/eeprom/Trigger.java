@@ -6,7 +6,7 @@ import ca.tpmd.x10.X10;
 import ca.tpmd.x10.Cmd;
 import ca.tpmd.x10.Control;
 
-public final class Trigger
+final class Trigger
 {
 
 private static final int SIZE = 3;
@@ -27,7 +27,7 @@ private Trigger(int h, int u, boolean on, String macro, int line)
 	_line = line;
 }
 
-public Trigger(byte[] b, HashMap<Integer, String> o2n)
+Trigger(byte[] b, HashMap<Integer, String> o2n)
 {
 	if (b.length != SIZE)
 		throw new IllegalArgumentException("trigger: got array of length " + b.length + ", expecting a " + SIZE + " byte array");
@@ -40,7 +40,7 @@ public Trigger(byte[] b, HashMap<Integer, String> o2n)
 	_line = -1;
 }
 
-public byte[] serialize()
+byte[] serialize()
 {
 	if (_ptr == -1) {
 		X10.err("trigger: macro pointer not set");
@@ -58,22 +58,22 @@ int line()
 	return _line;
 }
 
-public String macro()
+String macro()
 {
 	return _macro_name;
 }
 
-public int pointer()
+int pointer()
 {
 	return _ptr;
 }
 
-public void pointer(int p)
+void pointer(int p)
 {
 	_ptr = p;
 }
 
-public static Trigger parse(ArrayList<String> tokens, int line)
+static Trigger parse(ArrayList<String> tokens, int line)
 {
 	if (tokens.size() < 4) {
 		X10.err("Line " + line + ": not enough parameters to create trigger");

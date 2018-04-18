@@ -22,7 +22,7 @@ private Macro(String name, int delay, ArrayList<MacroCommand> commands, int line
 	_line = line;
 }
 
-public Macro(byte[] b, String name)
+Macro(byte[] b, String name)
 {
 	if (b.length < 2)
 		throw new IllegalArgumentException("macro: got array of length " + b.length + ", expecting at least 2 byte array");
@@ -39,7 +39,7 @@ public Macro(byte[] b, String name)
 	_line = -1;
 }
 
-public static Macro parse(ArrayList<String> tokens, HashMap<String, Integer> n2o, int line)
+static Macro parse(ArrayList<String> tokens, HashMap<String, Integer> n2o, int line)
 {
 	try {
 		String name = Schedule.next(tokens);
@@ -65,12 +65,12 @@ int line()
 	return _line;
 }
 
-public String name()
+String name()
 {
 	return _name;
 }
 
-public boolean chained()
+boolean chained()
 {
 	return _delay != 0;
 }
@@ -89,7 +89,7 @@ public String toString()
 	return s.toString();
 }
 
-public byte[] serialize()
+byte[] serialize()
 {
 	byte[] b = new byte[size()];
 	b[0] = (byte)_delay;
@@ -106,7 +106,7 @@ public byte[] serialize()
 	return b;
 }
 
-public int size()
+int size()
 {
 	int s = 2;
 	int i = _commands.size();

@@ -6,7 +6,7 @@ import ca.tpmd.x10.X10;
 import ca.tpmd.x10.Cmd;
 import ca.tpmd.x10.Control;
 
-public final class MacroCommand
+final class MacroCommand
 {
 
 private final Cmd _cmd;
@@ -26,7 +26,7 @@ private MacroCommand(Cmd cmd, int house, ArrayList<Integer> units, int data, int
 	_command = command;
 }
 
-public MacroCommand(byte[] b, int n)
+MacroCommand(byte[] b, int n)
 {
 	int command, data;
 	int hc = b[n] & 0xff;
@@ -44,7 +44,7 @@ public MacroCommand(byte[] b, int n)
 	_data = data;
 }
 
-public byte[] serialize()
+byte[] serialize()
 {
 	byte[] b = new byte[3 + _cmd.x10_data_len()];
 	b[0] = (byte)((X10.code(_house - 'A') << 4) | _cmd.ordinal());
@@ -76,7 +76,7 @@ private static ArrayList<Integer> units(ArrayList<String> tokens, boolean requir
 	return units;
 }
 
-public static MacroCommand parse(ArrayList<String> tokens)
+static MacroCommand parse(ArrayList<String> tokens)
 {
 	try {
 		String t = Schedule.next(tokens);
@@ -152,7 +152,7 @@ private static int x10_addr_mask(int units)
 	return m;
 }
 
-public int size()
+int size()
 {
 	return 3 + _cmd.x10_data_len();
 }
