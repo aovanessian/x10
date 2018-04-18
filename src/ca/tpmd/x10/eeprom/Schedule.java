@@ -2,6 +2,7 @@ package ca.tpmd.x10.eeprom;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Collections;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -118,9 +119,62 @@ private final void adjust()
 	if (!_macros.get(_macros.size() - 1).name().equals("null")) {
 		_n2o.remove("null");
 		parse_line("macro null 0", -1); // add 'null' macro
+		_n2o.put("null", 0); // allow removing 'null' macro if unreferenced
 	}
+	HashMap<String, Integer> names = new HashMap<String, Integer>();
+	Macro ma;
+	Timer ti;
+	Trigger tr;
+	ArrayList<String> warn = new ArrayList<String>();
+	// remove triggers referencing undefined macros
+	int i = _triggers.size();
+	while (i-- > 0) {
+		tr = _triggers.get(i);
+		String name = tr.macro();
+		if (_n2o.get(name) == null) {
+			warn.add("Line " + tr.line() + ": macro '" + tr.macro() + "' not defined, skipping timer");
+			_triggers.remove(i);
+			continue;
+		}
+		names.put(name, -1);
+	}
+	// remove timers referencing undefined macros
+	i = _timers.size();
+	while (i-- > 0) {
+		ti = _timers.get(i);
+		if (_n2o.get(ti.macro_start()) == null) {
+			warn.add("Line " + ti.line() + ": start macro '" + ti.macro_start() + "' not defined, skipping timer");
+			_triggers.remove(i);
+			continue;
+		}
+		if (_n2o.get(ti.macro_end()) == null) {
+			warn.add("Line " + ti.line() + ": end macro '" + ti.macro_end() + "' not defined, skipping timer");
+			_triggers.remove(i);
+			continue;
+		}
+		names.put(ti.macro_start(), -1);
+		names.put(ti.macro_end(), -1);
+	}
+	// remove unused macros
+	boolean prev = false;
+	for (i = 0; i < _macros.size(); i++) {
+		ma = _macros.get(i);
+		if (names.get(ma.name()) != null) { // referenced
+			prev = true;
+			continue;
+		}
+		if (ma.chained() && prev) // unreferenced but part of chain
+			continue;
+		// not chained or not part of unreachable chain, delete
+		warn.add("Line " + ma.line() + ": macro '" + ma.name() + "' is neither chained nor referenced, skipping");
+		_macros.remove(i--);
+		prev = false;
+	}
+	Collections.sort(warn); // sort warnings by line number
+	for (i = 0; i < warn.size(); i++)
+		X10.warn(warn.get(i));
+
 	// TODO
-	//	remove unused macros
 	//	remove duplicate triggers (same trigger, same macro)
 	//	remove duplicate timers
 	//
@@ -131,13 +185,13 @@ private final void adjust()
 	int size_tr = _triggers.size() > 0 ? _triggers.size() * 3 + 2 : 0;
 	int size_ti = _timers.size() > 0 ? _timers.size() * 9 + 1 : 0;
 	int size_ma = 0;
-	for (int i = 0; i < _macros.size(); i++)
+	for (i = 0; i < _macros.size(); i++)
 		size_ma += _macros.get(i).size();
 	int size = size_ma + size_tr + size_ti + 2;
 	X10.debug("macros: " + size_ma + ", triggers: " + size_tr + ", timers: " + size_ti);
 	if (size > 1024)
 		throw new IllegalArgumentException("schedule is too large (" + size + " bytes)");
-	X10.info("schedule size: " + size + " bytes");
+	X10.info("schedule size: " + size + " bytes (" + (1024 - size) + " free)");
 }
 
 private final void parse() throws IOException
@@ -211,7 +265,6 @@ private final Command image()
 		m = _macros.get(e);
 		tmp = m.serialize();
 		p -= tmp.length;
-
 		System.arraycopy(tmp, 0, _eeprom, p, tmp.length);
 		_n2o.put(m.name(), p);
 		_o2n.put(p, m.name());
@@ -273,21 +326,21 @@ private final void parse_line(String line, int n)
 	byte[] tmp;
 	switch (next(tokens)) {
 	case "timer":
-		Timer ti = Timer.parse(tokens);
+		Timer ti = Timer.parse(tokens, n);
 		if (ti == null)
 			break;
-		X10.verbose(ti.toString());
 		_timers.add(ti);
+		X10.verbose(ti.toString());
 		break;
 	case "trigger":
-		Trigger tr = Trigger.parse(tokens);
+		Trigger tr = Trigger.parse(tokens, n);
 		if (tr == null)
 			break;
-		X10.verbose(tr.toString());
 		_triggers.add(tr);
+		X10.verbose(tr.toString());
 		break;
 	case "macro":
-		Macro ma = Macro.parse(tokens, _n2o);
+		Macro ma = Macro.parse(tokens, _n2o, n);
 		if (ma == null)
 			break;
 		_macros.add(ma);

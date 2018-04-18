@@ -11,14 +11,15 @@ private String _name;
 private final int _delay;
 private final ArrayList<MacroCommand> _commands;
 private final int _length;
+private final int _line;
 
-
-private Macro(String name, int delay, ArrayList<MacroCommand> commands)
+private Macro(String name, int delay, ArrayList<MacroCommand> commands, int line)
 {
 	_name = name;
 	_delay = delay;
 	_commands = commands;
 	_length = commands.size();
+	_line = line;
 }
 
 public Macro(byte[] b, String name)
@@ -35,14 +36,15 @@ public Macro(byte[] b, String name)
 		_commands.add(mc);
 		n += mc.size();
 	}
+	_line = -1;
 }
 
-public static Macro parse(ArrayList<String> tokens, HashMap<String, Integer> n2o)
+public static Macro parse(ArrayList<String> tokens, HashMap<String, Integer> n2o, int line)
 {
 	try {
 		String name = Schedule.next(tokens);
 		if (n2o.get(name) != null)
-			throw new IllegalArgumentException("duplicate macro name: '" + name + "' already defined");
+			throw new IllegalArgumentException("Line " + line + ": duplicate macro name: '" + name + "' already defined");
 		int delay = Schedule.number(Schedule.next(tokens), 0, 240);
 		ArrayList<MacroCommand> commands = new ArrayList<MacroCommand>();
 		while (tokens.size() > 0) {
@@ -51,16 +53,26 @@ public static Macro parse(ArrayList<String> tokens, HashMap<String, Integer> n2o
 				return null;
 			commands.add(mc);
 		}
-		return new Macro(name, delay, commands);
+		return new Macro(name, delay, commands, line);
 	} catch (IllegalArgumentException x) {
 		X10.err("macro: " + x.getMessage());
 	}
 	return null;
 }
 
+int line()
+{
+	return _line;
+}
+
 public String name()
 {
 	return _name;
+}
+
+public boolean chained()
+{
+	return _delay != 0;
 }
 
 public String toString()

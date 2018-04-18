@@ -15,14 +15,16 @@ private final int _house;
 private final int _unit;
 private final boolean _on;
 private final String _macro_name;
+private final int _line;
 private int _ptr = -1;
 
-private Trigger(int h, int u, boolean on, String macro)
+private Trigger(int h, int u, boolean on, String macro, int line)
 {
 	_house = h;
 	_unit = u;
 	_on = on;
 	_macro_name = macro;
+	_line = line;
 }
 
 public Trigger(byte[] b, HashMap<Integer, String> o2n)
@@ -35,6 +37,7 @@ public Trigger(byte[] b, HashMap<Integer, String> o2n)
 	_on = (b[1] & 0x80) != 0;
 	_ptr = (b[2] & 0xff) | ((b[1] & 0x3) << 8);
 	_macro_name = (o2n == null) ? null : o2n.get(_ptr);
+	_line = -1;
 }
 
 public byte[] serialize()
@@ -48,6 +51,11 @@ public byte[] serialize()
 	r[1] = (byte)((_on ? 0x80 : 0x50) | (_ptr >>> 8));
 	r[2] = (byte)(_ptr & 0xff);
 	return r;
+}
+
+int line()
+{
+	return _line;
 }
 
 public String macro()
@@ -65,10 +73,10 @@ public void pointer(int p)
 	_ptr = p;
 }
 
-public static Trigger parse(ArrayList<String> tokens)
+public static Trigger parse(ArrayList<String> tokens, int line)
 {
 	if (tokens.size() < 4) {
-		X10.err("not enough parameters to create trigger");
+		X10.err("Line " + line + ": not enough parameters to create trigger");
 		return null;
 	}
 	try {
@@ -83,7 +91,7 @@ public static Trigger parse(ArrayList<String> tokens)
 		int unit = Schedule.number(Schedule.next(tokens), 1, 16);
 		String macro = Schedule.next(tokens);
 		X10.debug("house " + house + ", unit " + unit + ", command " + (on ? "ON" : "OFF") + ", macro: " + macro);
-		return new Trigger(house, unit, on, macro);
+		return new Trigger(house, unit, on, macro, line);
 	} catch (IllegalArgumentException x) {
 		X10.err("trigger: " + x.getMessage());
 	}

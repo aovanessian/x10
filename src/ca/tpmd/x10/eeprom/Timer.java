@@ -18,11 +18,12 @@ private int _ptr_start;
 private int _ptr_end;
 private String _macro_start;
 private String _macro_end;
+private final int _line;
 
 private static final char[] WD = {'s', 'm', 't', 'w', 't', 'f', 's'};
 private static final int SIZE = 9;
 
-private Timer(int wd_mask, int start_day, int start_time, boolean start_rnd, int end_day, int end_time, boolean end_rnd, String macro_start, String macro_end)
+private Timer(int wd_mask, int start_day, int start_time, boolean start_rnd, int end_day, int end_time, boolean end_rnd, String macro_start, String macro_end, int line)
 {
 	_wd_mask = wd_mask;
 	_day_start = start_day;
@@ -34,6 +35,7 @@ private Timer(int wd_mask, int start_day, int start_time, boolean start_rnd, int
 	_macro_start = macro_start;
 	_macro_end = macro_end;
 	_ptr_start = _ptr_end = -1;
+	_line = line;
 }
 
 public Timer(byte[] b, HashMap<Integer, String> o2n)
@@ -55,6 +57,12 @@ public Timer(byte[] b, HashMap<Integer, String> o2n)
 		_macro_start = o2n.get(_ptr_start);
 		_macro_end = o2n.get(_ptr_end);
 	}
+	_line = -1;
+}
+
+int line()
+{
+	return _line;
 }
 
 public void pointers(int start, int end)
@@ -201,12 +209,12 @@ private static String time(int time, boolean rnd)
 	return s.toString();
 }
 
-public static Timer parse(ArrayList<String> tokens)
+public static Timer parse(ArrayList<String> tokens, int line)
 {
 	boolean rnd_start = false;
 	boolean rnd_end = false;
 	if (tokens.size() != 7) {
-		X10.err("Not enough parameters to create timer");
+		X10.err("Line " + line + ": not enough parameters to create timer");
 		return null;
 	}
 	try {
@@ -227,7 +235,7 @@ public static Timer parse(ArrayList<String> tokens)
 		String macro_end = Schedule.next(tokens);
 		X10.debug("weekday mask: " + wd_mask + ", start day: " + day_start + ", end day: " + day_end + 
 				", start time: " + time_start + (rnd_start ? " +60m" : "") + ", end time: " + time_end + (rnd_end ? " +60m" : ""));
-		Timer t = new Timer(wd_mask, day_start, time_start, rnd_start, day_end, time_end, rnd_end, macro_start, macro_end);
+		Timer t = new Timer(wd_mask, day_start, time_start, rnd_start, day_end, time_end, rnd_end, macro_start, macro_end, line);
 		return t;
 	} catch (IllegalArgumentException x) {
 		X10.err(x.getMessage());

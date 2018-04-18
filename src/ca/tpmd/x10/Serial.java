@@ -408,7 +408,6 @@ private boolean eeprom_write(byte[] data)
 	int n = 64, k, i;
 	boolean result = eeprom_erase();
 	boolean empty;
-	//_sbuf[0] = (byte)CMD_EEPROM_DL;
 	while (result == true && n-- > 0) {
 		k = n << 4;
 		empty = true;
