@@ -21,7 +21,7 @@ private MacroCommand(Cmd cmd, int house, ArrayList<Integer> units, int data, int
 		throw new IllegalArgumentException("invalid eeprom command " + cmd);
 	_cmd = cmd;
 	_house = house;
-	_units = addr_mask(units);//addr_mask(_cmd.x10_need_addr() ? units : null);
+	_units = addr_mask(units);
 	_data = data;
 	_command = command;
 }
@@ -60,7 +60,7 @@ byte[] serialize()
 	return b;
 }
 
-private static ArrayList<Integer> units(ArrayList<String> tokens, boolean required)
+private static ArrayList<Integer> units(ArrayList<String> tokens)
 {
 	ArrayList<Integer> units = new ArrayList<Integer>();
 	while (tokens.size() != 0) {
@@ -71,8 +71,6 @@ private static ArrayList<Integer> units(ArrayList<String> tokens, boolean requir
 		}
 		tokens.remove(0);
 	}
-	if (required && units.size() == 0)
-		throw new IllegalArgumentException("at least one address is required");
 	return units;
 }
 
@@ -88,7 +86,7 @@ static MacroCommand parse(ArrayList<String> tokens)
 		int command = 0;
 		int data = cmd.need_dim() ? Schedule.number(Schedule.next(tokens), 0, 22) : 0;
 		int house = Schedule.house(Schedule.next(tokens));
-		ArrayList<Integer> units = units(tokens, cmd.x10_need_addr());
+		ArrayList<Integer> units = units(tokens);
 		return new MacroCommand(cmd, house, units, data, command);
 	} catch (IllegalArgumentException x) {
 		X10.err("macro command: " + x.getMessage());
