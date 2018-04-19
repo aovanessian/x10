@@ -8,7 +8,7 @@ public final class Macro
 {
 
 private String _name;
-private final int _delay;
+private int _delay;
 private final ArrayList<MacroCommand> _commands;
 private final int _length;
 private final int _line;
@@ -22,15 +22,16 @@ private Macro(String name, int delay, ArrayList<MacroCommand> commands, int line
 	_line = line;
 }
 
-Macro(byte[] b, String name)
+Macro(byte[] b, String name, boolean offset)
 {
 	if (b.length < 2)
 		throw new IllegalArgumentException("macro: got array of length " + b.length + ", expecting at least 2 byte array");
-	_delay = b[0] & 0xff;
-	_length = b[1] & 0xff;
+	int n = offset ? 1 : 0;
+	int delay = b[n++] & 0xff;
+	_delay = (delay == 0) ? 0 : (offset ? delay : -delay);
+	_length = b[n++] & 0xff;
 	_name = name == null ? "<unknown>" : name;
 	_commands = new ArrayList<MacroCommand>(_length);
-	int n = 2;
 	for (int i = 0; i < _length; i++) {
 		MacroCommand mc = new MacroCommand(b, n);
 		_commands.add(mc);
@@ -45,7 +46,7 @@ static Macro parse(ArrayList<String> tokens, HashMap<String, Integer> n2o, int l
 		String name = Schedule.next(tokens);
 		if (n2o.get(name) != null)
 			throw new IllegalArgumentException("Line " + line + ": duplicate macro name: '" + name + "' already defined");
-		int delay = Schedule.number(Schedule.next(tokens), 0, 240);
+		int delay = Schedule.number(Schedule.next(tokens), -240, 240);
 		ArrayList<MacroCommand> commands = new ArrayList<MacroCommand>();
 		while (tokens.size() > 0) {
 			MacroCommand mc = MacroCommand.parse(tokens);
@@ -60,6 +61,16 @@ static Macro parse(ArrayList<String> tokens, HashMap<String, Integer> n2o, int l
 	return null;
 }
 
+void unchain()
+{
+	_delay = abs(_delay);
+}
+
+int offset()
+{
+	return _delay > 0 ? 1 : 0;
+}
+
 int line()
 {
 	return _line;
@@ -72,7 +83,7 @@ String name()
 
 boolean chained()
 {
-	return _delay != 0;
+	return _delay < 0;
 }
 
 public String toString()
@@ -92,11 +103,13 @@ public String toString()
 byte[] serialize()
 {
 	byte[] b = new byte[size()];
-	b[0] = (byte)_delay;
-	b[1] = (byte)_commands.size();
+	int n = 0;
+	if (_delay > 0)
+		b[n++] = 0;
+	b[n++] = (byte)abs(_delay);
+	b[n++] = (byte)_commands.size();
 	byte[] tmp;
 	MacroCommand mc;
-	int n = 2;
 	for (int i = 0; i < _commands.size(); i++) {
 		mc = _commands.get(i);
 		tmp = mc.serialize();
@@ -106,9 +119,14 @@ byte[] serialize()
 	return b;
 }
 
+static int abs(int n)
+{
+	return n < 0 ? -n : n;
+}
+
 int size()
 {
-	int s = 2;
+	int s = 2 + offset();
 	int i = _commands.size();
 	while (i-- > 0)
 		s += _commands.get(i).size();

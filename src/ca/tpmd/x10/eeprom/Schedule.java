@@ -132,7 +132,7 @@ private final void adjust()
 		tr = _triggers.get(i);
 		String name = tr.macro();
 		if (_n2o.get(name) == null) {
-			warn.add("Line " + tr.line() + ": macro '" + tr.macro() + "' not defined, skipping timer");
+			warn.add("Line " + tr.line() + ": trigger macro '" + tr.macro() + "' not defined, skipping");
 			_triggers.remove(i);
 			continue;
 		}
@@ -143,12 +143,12 @@ private final void adjust()
 	while (i-- > 0) {
 		ti = _timers.get(i);
 		if (_n2o.get(ti.macro_start()) == null) {
-			warn.add("Line " + ti.line() + ": start macro '" + ti.macro_start() + "' not defined, skipping timer");
+			warn.add("Line " + ti.line() + ": timer start macro '" + ti.macro_start() + "' not defined, skipping");
 			_triggers.remove(i);
 			continue;
 		}
 		if (_n2o.get(ti.macro_end()) == null) {
-			warn.add("Line " + ti.line() + ": end macro '" + ti.macro_end() + "' not defined, skipping timer");
+			warn.add("Line " + ti.line() + ": timer end macro '" + ti.macro_end() + "' not defined, skipping");
 			_triggers.remove(i);
 			continue;
 		}
@@ -160,12 +160,16 @@ private final void adjust()
 	for (i = 0; i < _macros.size(); i++) {
 		ma = _macros.get(i);
 		if (names.get(ma.name()) != null) { // referenced
+			if (!prev && ma.chained()) {
+				ma.unchain();
+				X10.verbose("unchaining " + ma);
+			}
 			prev = true;
 			continue;
 		}
 		if (ma.chained() && prev) // unreferenced but part of chain
 			continue;
-		// not chained or not part of unreachable chain, delete
+		// not chained or part of unreachable chain, delete
 		warn.add("Line " + ma.line() + ": macro '" + ma.name() + "' is neither chained nor referenced, skipping");
 		_macros.remove(i--);
 		prev = false;
@@ -248,8 +252,16 @@ private static final void read_image(byte[] b, HashMap<Integer, String> o2n)
 	do {
 		System.arraycopy(b, n, tmp, 0, 1024 - n);
 		name = o2n.get(n);
-		m = new Macro(tmp, name);
+		boolean offset = false;
+		if (name == null) {
+			name = o2n.get(++n);
+			offset = true;
+			n--;
+		}
+		m = new Macro(tmp, name, offset);
 		n += m.size();
+		if (name.equals("null"))
+			continue;
 		X10.debug(X10.hex(tmp, m.size()));
 		X10.verbose(m.toString());
 	} while (n < 1024);
@@ -266,8 +278,8 @@ private final Command image()
 		tmp = m.serialize();
 		p -= tmp.length;
 		System.arraycopy(tmp, 0, _eeprom, p, tmp.length);
-		_n2o.put(m.name(), p);
-		_o2n.put(p, m.name());
+		_n2o.put(m.name(), p + m.offset());
+		_o2n.put(p + m.offset(), m.name());
 	}
 	_eeprom[--p] = (byte)0xff; // triggers end marker
 	_eeprom[--p] = (byte)0xff;
