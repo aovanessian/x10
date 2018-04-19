@@ -144,12 +144,12 @@ private final void adjust()
 		ti = _timers.get(i);
 		if (_n2o.get(ti.macro_start()) == null) {
 			warn.add("Line " + ti.line() + ": timer start macro '" + ti.macro_start() + "' not defined, skipping");
-			_triggers.remove(i);
+			_timers.remove(i);
 			continue;
 		}
 		if (_n2o.get(ti.macro_end()) == null) {
 			warn.add("Line " + ti.line() + ": timer end macro '" + ti.macro_end() + "' not defined, skipping");
-			_triggers.remove(i);
+			_timers.remove(i);
 			continue;
 		}
 		names.put(ti.macro_start(), -1);
