@@ -24,9 +24,6 @@ Command(Cmd c, int house, int[] units, int dim)
 			if (units[i] < 1 || units[i] > 16)
 				throw new IllegalArgumentException("Unit id outside allowed range: " + units[i]);
 	}
-
-	if (dim < 0 || dim > 22)
-		throw new IllegalArgumentException("Dim level outside allowed range: " + dim);
 	_command = c;
 	_house = house;
 	_units = units;

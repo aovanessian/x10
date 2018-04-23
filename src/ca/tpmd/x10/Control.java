@@ -87,8 +87,8 @@ private static Command parse(String s)
 		dim = number(tokens.get(token++));
 		if (dim == -1)
 			return null;
-		if (dim < 0 || dim > 22) {
-			X10.err(command + " level outside of allowed range [0..22]: " + dim);
+		if (dim < 0 || dim > 31) {
+			X10.err(command + " level outside of allowed range: " + dim);
 			return null;
 		}
 	}
