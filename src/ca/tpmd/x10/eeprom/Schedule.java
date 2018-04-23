@@ -3,6 +3,8 @@ package ca.tpmd.x10.eeprom;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.TreeSet;
+import java.util.Locale;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
@@ -119,7 +121,7 @@ private final void adjust()
 	if (!_macros.get(_macros.size() - 1).name().equals("null")) {
 		_n2o.remove("null");
 		parse_line("macro null 0", -1); // add 'null' macro
-		_n2o.put("null", 0); // allow removing 'null' macro if unreferenced
+		_n2o.put("null", 0);
 	}
 	HashMap<String, Integer> names = new HashMap<String, Integer>();
 	Macro ma;
@@ -160,9 +162,12 @@ private final void adjust()
 	for (i = 0; i < _macros.size(); i++) {
 		ma = _macros.get(i);
 		if (names.get(ma.name()) != null) { // referenced
-			if (!prev && ma.chained()) {
-				ma.unchain();
-				X10.verbose("unchaining " + ma);
+			if (!prev && ma.chained()) { // part of chain but parent is unreferenced (or it's the first macro)
+				if (i > 0) {
+					ma.unchain(); // unchaining it so that it does not run after previously-valid macro
+							// will not unchain the first one - saves a whole byte!
+					X10.verbose("unchaining " + ma);
+				}
 			}
 			prev = true;
 			continue;
@@ -187,9 +192,10 @@ private final void adjust()
 	
 	// verify we have not exceeded 1024 bytes
 	int size_tr = _triggers.size() > 0 ? _triggers.size() * 3 + 2 : 0;
-	int size_ti = _timers.size() > 0 ? _timers.size() * 9 + 1 : 0;
+	int size_ti = _timers.size() * 9 + 1;
 	int size_ma = 0;
-	for (i = 0; i < _macros.size(); i++)
+	i = _macros.size();
+	while (i-- > 0)
 		size_ma += _macros.get(i).size();
 	int size = size_ma + size_tr + size_ti + 2;
 	X10.debug("macros: " + size_ma + ", triggers: " + size_tr + ", timers: " + size_ti);
@@ -207,7 +213,7 @@ private final void parse() throws IOException
 	int n = 0;
 	while ((line = bufferedReader.readLine()) != null)
 		parse_line(line, ++n);
-	X10.info("parsed " + n + " lines");
+	X10.verbose("parsed " + n + " lines");
 	fileReader.close();
 }
 
@@ -310,6 +316,16 @@ private final Command image()
 	X10.debug(X10.hex(_eeprom));
 	n -= p;
 	X10.info("free eeprom space: " + n + " bytes, enough for " + (n / 9) + " more timers");
+	X10.info(_o2n.toString());
+	StringBuilder s = new StringBuilder();
+	TreeSet<Integer> o = new TreeSet<Integer>(_o2n.keySet());
+	for (Integer z : o) {
+		s.append("\n\t");
+		s.append(z);
+		s.append("\t");
+		s.append(_o2n.get(z));
+	}
+	X10.info(s.toString());
 	Schedule.read_image(_eeprom, _o2n);
 	try {
 		FileOutputStream eeprom = new FileOutputStream(_image);
@@ -336,7 +352,7 @@ private final void parse_line(String line, int n)
 		return;
 	}
 	byte[] tmp;
-	switch (next(tokens)) {
+	switch (next(tokens).toLowerCase(Locale.US)) {
 	case "timer":
 		Timer ti = Timer.parse(tokens, n);
 		if (ti == null)

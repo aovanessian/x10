@@ -17,8 +17,6 @@ private final int _command;
 
 private MacroCommand(Cmd cmd, int house, ArrayList<Integer> units, int data, int command)
 {
-	if (!cmd.x10_cmd())
-		throw new IllegalArgumentException("invalid eeprom command " + cmd);
 	_cmd = cmd;
 	_house = house;
 	_units = addr_mask(units);
@@ -55,7 +53,7 @@ byte[] serialize()
 	case 2:
 		b[4] = (byte)_command;
 	case 1:
-		b[3] = (byte)_data;
+		b[3] = (byte)(_data & 0xff);
 	}
 	return b;
 }
@@ -84,7 +82,15 @@ static MacroCommand parse(ArrayList<String> tokens)
 			return null;
 		}
 		int command = 0;
-		int data = cmd.need_dim() ? Schedule.number(Schedule.next(tokens), 0, 22) : 0;
+		int data = 0;
+		if (cmd.need_dim()) {
+			data = Schedule.number(Schedule.next(tokens), -31, 31);
+			if (data < 0) {
+				data = -data;
+				if (cmd == Cmd.DIM)
+					data |= 0x80;
+			}
+		}
 		int house = Schedule.house(Schedule.next(tokens));
 		ArrayList<Integer> units = units(tokens);
 		return new MacroCommand(cmd, house, units, data, command);
@@ -94,6 +100,11 @@ static MacroCommand parse(ArrayList<String> tokens)
 	return null;
 }
 
+private final boolean bright_before_dim()
+{
+	return _cmd == Cmd.DIM && ((_data & 0x80) != 0);
+}
+
 public String toString()
 {
 	StringBuilder s = new StringBuilder();
@@ -101,7 +112,9 @@ public String toString()
 	s.append(" ");
 	switch (_cmd.x10_data_len()) {
 	case 1:
-		s.append(_data);
+		if (bright_before_dim())
+			s.append("-");
+		s.append(_data & 0x7f);
 		s.append(" ");
 		break;
 	case 2:
