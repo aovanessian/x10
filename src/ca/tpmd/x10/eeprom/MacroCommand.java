@@ -31,7 +31,7 @@ MacroCommand(byte[] b, int n)
 	_house = X10.house(hc >>> 4);
 	_cmd = Cmd.lookup(hc & 0xf);
 	command = data = 0;
-	_units = addr_mask(((b[n + 1] & 0xff) << 8) | (b[n + 2] & 0xff));
+	_units = ((b[n + 1] & 0xff) << 8) | (b[n + 2] & 0xff);
 	switch (_cmd.x10_data_len()) {
 	case 2:
 		command = b[n + 4] & 0xff;
@@ -46,12 +46,15 @@ byte[] serialize()
 {
 	byte[] b = new byte[3 + _cmd.x10_data_len()];
 	b[0] = (byte)((X10.code(_house - 'A') << 4) | _cmd.ordinal());
-	int units = x10_addr_mask(_units);
-	b[1] = (byte)((units >>> 8) & 0xff);
-	b[2] = (byte)(units & 0xff);
+	b[1] = (byte)((_units >>> 8) & 0xff);
+	b[2] = (byte)(_units & 0xff);
 	switch (_cmd.x10_data_len()) {
-	case 2:
-		b[4] = (byte)_command;
+	case 3:
+		b[1] = b[2] = 0;
+		b[3] = 0; // unit, actually
+		b[4] = (byte)_data;
+		b[5] = (byte)_command;
+		break;
 	case 1:
 		b[3] = (byte)(_data & 0xff);
 	}
@@ -125,9 +128,8 @@ public String toString()
 		break;
 	}
 	s.append((char)_house);
-
 	for (int i = 0; i < 16; i++) {
-		if ((_units & (1 << i)) != 0) {
+		if ((_units & (1 << X10.code(i))) != 0) {
 			s.append(" ");
 			s.append(i + 1);
 		}
@@ -141,25 +143,7 @@ private static int addr_mask(ArrayList<Integer> units)
 		return 0;
 	int m = 0;
 	for (int i = 0; i < units.size(); i++)
-		m |= 1 << units.get(i) - 1;
-	return m;
-}
-
-private static int addr_mask(int x10)
-{
-	int m = 0;
-	for (int i = 0; i < 16; i++)
-		if ((x10 & (1 << X10.code(i))) != 0)
-			m |= 1 << i;
-	return m;
-}
-
-private static int x10_addr_mask(int units)
-{
-	int m = 0;
-	for (int i = 0; i < 16; i++)
-		if ((units & (1 << i)) != 0)
-			m |= 1 << X10.code(i);
+		m |= 1 << X10.code(units.get(i) - 1);
 	return m;
 }
 
