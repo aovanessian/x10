@@ -6,6 +6,7 @@ public final class X10
 private static final char[] _hex    = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 private static final byte[] _codes  = {0x6, 0xe, 0x2, 0xa, 0x1, 0x9, 0x5, 0xd, 0x7, 0xf, 0x3, 0xb, 0x0, 0x8, 0x4, 0xc};
 private static final byte[] _lookup = {'M', 'E', 'C', 'K', 'O', 'G', 'A', 'I', 'N', 'F', 'D', 'L', 'P', 'H', 'B', 'J'};
+private static final byte[] _le     = {0x0, 0x8, 0x4, 0xc, 0x2, 0xa, 0x6, 0xe, 0x1, 0x9, 0x5, 0xd, 0x3, 0xb, 0x7, 0xf};
 
 private static final int DEBUG = 3;
 private static final int TIMING = 2;
@@ -38,6 +39,11 @@ static final void log_level(int level)
 	}
 	log(INFO, "Log level: " + s);
 	_level = level;
+}
+
+public static int le(int i)
+{
+	return _le[i];
 }
 
 public static int code(int i)

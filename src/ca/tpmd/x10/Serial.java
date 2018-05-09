@@ -15,6 +15,7 @@ private static SerialPort _port;
 private final static String[] _weekdays = {"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
 private static Serial _serial = null;
 private static ArrayList<Command> _commands = new ArrayList<Command>();
+private int _last_addr = 0;
 private static final int DELAY = 25;
 private static final int RETRIES = 3;
 
@@ -102,7 +103,8 @@ private int listen(boolean delay)
 	if (delay) {
 		delay(3); // wait 3ms to see if there's another byte coming, which at 4800 kbps 8N1 should take around 2.1ms
 		if (_port.bytesAvailable() > 1) // yep, it's more than one
-			delay(27); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
+			//delay(27); // just enough time to receive 12 more bytes of 14 byte state transmission (which seems to be the longest one)
+			delay(35);
 	}
 	int n = _port.readBytes(_buf, delay ? _port.bytesAvailable() : 1);
 	if (n != 0)
@@ -179,6 +181,18 @@ private boolean function(int house, int dim, int command)
 	return command(2, 300 + dim * 200);
 }
 
+private boolean extended(int house, int unit, int data, int command)
+{
+	X10.debug("extended command: house " + X10.house(house) + ", unit " + unit + ", data " + data + ", command " + command);
+	_sbuf[0] = (byte)0xf;
+	_sbuf[1] = (byte)(house << 4 | 7);
+	_sbuf[2] = (byte)unit;
+	_sbuf[3] = (byte)data;
+	_sbuf[4] = (byte)command;
+	_sbuf[5] = (byte)checksum(_sbuf, 0, 5);
+	return command(5, 1300);
+}
+
 private static long time()
 {
 	return System.currentTimeMillis();
@@ -202,52 +216,75 @@ private void parse_status(int n)
 		return;
 	}
 	X10.debug("got " + k + " bytes to parse");
+	StringBuilder s = new StringBuilder();
+	StringBuilder t = new StringBuilder();
 	int map = _buf[1] & 0xff;
 	int p = 2;
-	int b;
-	int z;
-	boolean addr_seen = false;
-	StringBuilder s = new StringBuilder();
+	if (_last_addr != 0) { // last transmission ended with an address - start parsing from that
+		_buf[1] = (byte)(_last_addr & 0xff);
+		p = 1;
+		map <<= 1;
+		s.append("Continuing from where we left off...\n\t");
+	}
+	int b, c, z;
 	while (p < k) {
-		addr_seen = false;
 		z = _buf[p] & 0xff;
 		b = map & 1;
 		map >>>= 1;
 		X10.debug("byte at " + p + " (" + X10.hex(z) + ") is " + (b == 0 ? "an address" : "a function"));
 		p++;
+		_last_addr = 0;
 		if (b == 0) {
+			if (p == k) { // last byte is an address; function will come in next transmission
+				_last_addr = z | 0x100;
+				break;
+			}
 			s.append(X10.house(z >>> 4));
 			s.append(X10.unit(z & 0xf));
 			s.append(" ");
-			addr_seen = true;
 			continue;
 		}
-		if (!addr_seen) {
-			s.append(X10.house(z >>> 4));
-			s.append(" ");
-		}
+		t.setLength(0);
+		t.append(X10.house(z >>> 4));
+		t.append(" ");
 		Cmd func = Cmd.lookup(z & 0xf);
-		s.append(func.label());
+		t.append(func.label());
+		c = 0;
 		switch (func) {
 		case DIM:
-			s.append("m");
+			t.append("m");
 		case BRIGHT:
-			s.append("ed by ");
-			s.append((_buf[p++] & 0xff) * 100 / 210);
-			s.append("%");
+			t.append("ed by ");
+			t.append((_buf[p++] & 0xff) * 100 / 210);
+			t.append("%");
 			map >>>= 1;
 			break;
 		case EXT_CODE_1:
-			s.append(" data: ");
-			s.append(X10.hex(_buf[p++]));
-			s.append(", command: ");
-			s.append(X10.hex(_buf[p++]));
-			s.append(", unit: ");
-			s.append(X10.hex(_buf[p++]));
+			t.append(" data: ");
+			t.append(X10.hex(_buf[p++]));
+			t.append(", command: ");
+			t.append(X10.hex(_buf[p++]));
+			t.append(", unit: ");
+			t.append(X10.hex(_buf[p++]));
 			map >>>= 3;
 			break;
+		case PRESET_DIM_2:
+			c = 16;
+		case PRESET_DIM_1:
+			b = X10.le(z >>> 4) + c;
+			t.setLength(0);
+			t.append("preset dim level: ");
+			t.append(b * 100 / 31);
+			t.append("%, temp: ");
+			z = X10.unit(_buf[p - 2] & 0xf) - 11; // unit code in [11..16]
+			c = (z << 5) + b - 60;
+			t.append(c);
+			t.append("\u00b0");
+			t.append(c < 50 ? 'C' : 'F');
+			break;
 		}
-		s.append("; ");
+		s.append(t.toString());
+		s.append("\n\t");
 	}
 	X10.info(s.toString());
 }
@@ -332,12 +369,33 @@ private boolean parse_state(int n)
 private boolean cmd(Command c)
 {
 	int house = X10.code(c.house());
-	int[] units = c.units();
-	if (units != null)
-		for (int i = 0; i < units.length; i++)
-			if (!address(house, X10.code((units[i] - 1))))
+	int units = c.units();
+	if (units != 0) {
+		int unit;
+		for (int i = 0; i < 16; i++) {
+			unit = X10.code(i);
+			if ((units & (1 << unit)) == 0)
+				continue;
+			if (!address(house, unit))
 				return false;
+		}
+	}
 	return c.cmdCode() > 15 ? true : function(house, c.dim(), c.cmdCode());
+}
+
+private boolean xcmd(Command c)
+{
+	int house = X10.code(c.house());
+	int units = c.units();
+	int unit = X10.code(0);
+	if (units != 0) {
+		for (int i = 0; i < 16; i++) {
+			unit = X10.code(i);
+			if ((units & (1 << unit)) != 0)
+				break;
+		}
+	}
+	return extended(house, unit, 0xfe, 0x31);
 }
 
 private static final String pad(int n)
@@ -374,33 +432,6 @@ private boolean sys_cmd(int cmd)
 
 private boolean eeprom_write(byte[] data)
 {
-	/*
-	our eeprom data arrangement:
-
-	0x0000	offset to <triggers>	2 bytes, 'TTTT'
-	0x0002	<timers>		9 x number of timers
-	.
-	.	number of timers times 9
-	.
-	0x????	0xff			end of timers marker
-	.
-	.	<empty space>		= 1024 - (2 + 9 * timers + 1 + 3 * triggers + 2 + macros + 1)
-	.					if, say, there's no timers, single trigger and single-command standard code macro, empty
-	.					space will be 1012 bytes (two bytes in first page, 10 bytes in last page)
-	0xTTTT	<triggers>		3 x number of triggers
-	.
-	.	number of triggers times 3
-	.
-	0x????	0xff			end of triggers marker
-	.	0xff
-	.
-	.	<macros>		our macros go here
-	.
-	0x03fe	0x00			Our 'null' macro
-	0x03ff	0x00
-
-	*/
-
 	if (data.length != 1024) {
 		X10.err("Image length is " + data.length + ", should be 1024 bytes");
 		return false;
@@ -417,9 +448,6 @@ private boolean eeprom_write(byte[] data)
 				break;
 			}
 		if (empty) {
-			// taking advantage of the fact that CM11a jumps to the triggered macro and starts reading forward;
-			// since we put our macros at the end of the eeprom, we won't have to overwrite previous data as
-			// we have no way to jump in there.
 			X10.verbose("Block " + (n + 1) + " empty, skipping write");
 			continue;
 		}
@@ -436,14 +464,6 @@ private boolean eeprom_write(byte[] data)
 
 private boolean eeprom_erase()
 {
-	/* 1024 bytes
-		2	triggers offset (9 * timers + 3)
-		9*n	timers (9 bytes each)
-		1	0xff
-		3*m	triggers (3 bytes each)
-		2	0xff
-		...	macros
-	*/
 	_sbuf[0] = (byte)CMD_EEPROM_DL;
 	_sbuf[1] = _sbuf[2] = _sbuf[3] = 0;
 	_sbuf[4] = 2;
@@ -573,25 +593,25 @@ public void run()
 		if (command.exit())
 			break;
 		t = time();
-		if (!command.cmdSystem()) {
-			if (cmd(command)) {
+		if (command.cmdSystem()) {
+			if (sys_cmd(command))
 				X10.info(command + " completed in " + time(t));
-				_commands.remove(0);
-				r = RETRIES;
-				continue;
-			}
-			if (--r == 0) { // interface not responding - either power is out or there's traffic on the line
-				X10.warn(command + " unsuccessful " + RETRIES + " times, will wait for interface to wake us up");
-				r = RETRIES;
-				sleep(0); // we'll get woken up when inerface sends data (or more commands added)
-			}
+			else
+				X10.warn(command + " unsuccessful");
+			_commands.remove(0);
 			continue;
 		}
-		if (sys_cmd(command))
+		if (command.cmdExtended() ? xcmd(command) : cmd(command)) {
 			X10.info(command + " completed in " + time(t));
-		else
-			X10.warn(command + " unsuccessful");
-		_commands.remove(0);
+			_commands.remove(0);
+			r = RETRIES;
+			continue;
+		}
+		if (--r == 0) { // interface not responding - either power is out or there's traffic on the line
+			X10.warn(command + " unsuccessful " + RETRIES + " times, will wait for interface to wake us up");
+			r = RETRIES;
+			sleep(0); // we'll get woken up when inerface sends data (or more commands added)
+		}
 	}
 	X10.info("shutting down serial interface");
 	teardown();

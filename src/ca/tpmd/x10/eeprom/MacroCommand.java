@@ -45,7 +45,7 @@ MacroCommand(byte[] b, int n)
 byte[] serialize()
 {
 	byte[] b = new byte[3 + _cmd.x10_data_len()];
-	b[0] = (byte)((X10.code(_house - 'A') << 4) | _cmd.ordinal());
+	b[0] = (byte)((X10.code(_house - 'A') << 4) | _cmd.code());
 	b[1] = (byte)((_units >>> 8) & 0xff);
 	b[2] = (byte)(_units & 0xff);
 	switch (_cmd.x10_data_len()) {

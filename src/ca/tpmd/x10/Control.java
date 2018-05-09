@@ -206,6 +206,20 @@ public static Cmd command(String s)
 	case "addr":
 	case "address":
 		return Cmd.ADDRESS;
+	case "xon":
+		return Cmd.XON;
+	case "xoff":
+		return Cmd.XOFF;
+	case "xdim":
+		return Cmd.XDIM;
+	case "xao":
+	case "x-all-off":
+	case "x_all_off":
+		return Cmd.X_ALL_OFF;
+	case "xaon":
+	case "x-all-on":
+	case "x_all_on":
+		return Cmd.X_ALL_ON;
 	case "er":
 		return Cmd.RING_ENABLE;
 	case "dr":
