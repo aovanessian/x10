@@ -274,8 +274,10 @@ private void parse_status(int n)
 			b = X10.le(z >>> 4) + c;
 			t.setLength(0);
 			t.append("preset dim level: ");
+			t.append(b);
+			t.append(" (");
 			t.append(b * 100 / 31);
-			t.append("%, temp: ");
+			t.append("%), temp: ");
 			z = X10.unit(_buf[p - 2] & 0xf) - 11; // unit code in [11..16]
 			c = (z << 5) + b - 60;
 			t.append(c);
@@ -380,14 +382,14 @@ private boolean cmd(Command c)
 				return false;
 		}
 	}
-	return c.cmdCode() > 15 ? true : function(house, c.dim(), c.cmdCode());
+	return c.cmdCode() > 15 ? true : function(c.cmdHouse(), c.dim(), c.cmdCode());
 }
 
 private boolean xcmd(Command c)
 {
 	int house = X10.code(c.house());
 	int units = c.units();
-	int unit = X10.code(0);
+	int unit = 0;//X10.code(0);
 	if (units != 0) {
 		for (int i = 0; i < 16; i++) {
 			unit = X10.code(i);

@@ -61,7 +61,6 @@ private static Command parse(String s)
 	case SYSTEM_STATE:
 	case RING_ENABLE:
 	case RING_DISABLE:
-	case EEPROM_ERASE:
 		return new Command(command);
 	}
 	if (tokens.size() < 2) {
@@ -187,6 +186,10 @@ public static Cmd command(String s)
 	case "bright":
 	case "brighten":
 		return Cmd.BRIGHT;
+	case "pdim":
+	case "preset-dim":
+	case "preset_dim":
+		return Cmd.PRESET_DIM;
 	case "loff":
 	case "lightsoff":
 	case "lights-off":
@@ -224,8 +227,6 @@ public static Cmd command(String s)
 		return Cmd.RING_ENABLE;
 	case "dr":
 		return Cmd.RING_DISABLE;
-	case "erase_macros":
-		return Cmd.EEPROM_ERASE;
 	case "clock":
 		return Cmd.CLOCK_SET;
 	case "sys":

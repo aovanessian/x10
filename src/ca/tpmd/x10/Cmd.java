@@ -21,6 +21,7 @@ STATUS_OFF		("module off"),
 STATUS_REQ		("status request"),
 
 ADDRESS			("address unit(s)"),
+PRESET_DIM		("preset dim"),
 
 XON			("extended on", 0x3e, 0x31),
 XOFF			("extended off", 0x00, 0x31),
@@ -75,6 +76,8 @@ public int code()
 	case X_ALL_OFF:
 	case X_ALL_ON:
 		return EXT_CODE_1.ordinal();
+	case PRESET_DIM:
+		return PRESET_DIM_1.ordinal();
 	}
 	return ordinal();
 }
@@ -138,7 +141,7 @@ boolean need_addr()
 
 public boolean need_dim()
 {
-	return this == DIM || this == BRIGHT;
+	return this == DIM || this == BRIGHT || this == PRESET_DIM;
 }
 
 String label()

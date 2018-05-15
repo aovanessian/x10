@@ -77,6 +77,8 @@ String cmdLabel()
 
 int cmdCode()
 {
+	if (_command == Cmd.PRESET_DIM)
+		return _dim > 15 ? Cmd.PRESET_DIM_2.code() : Cmd.PRESET_DIM_1.code();
 	return _command.code();
 }
 
@@ -100,6 +102,11 @@ int house()
 	return _house;
 }
 
+int cmdHouse()
+{
+	return _command == Cmd.PRESET_DIM ? X10.le(_dim & 0xf) : X10.code(_house);
+}
+
 int units()
 {
 	return _units;
@@ -107,7 +114,7 @@ int units()
 
 int dim()
 {
-	return _dim;
+	return _command == Cmd.PRESET_DIM ? 1 : _dim;
 }
 
 public String toString()
@@ -122,14 +129,17 @@ public String toString()
 			s.append(" ");
 		}
 	} else if (_house != -1) {
-		s.append((char)(_house + 'A'));
+		s.append(X10.house(cmdHouse()));
 		s.append(" ");
 	}
 	s.append(_command.label());
 	if (_command.need_dim()) {
+		int i = _command == Cmd.PRESET_DIM ? 31 : 22;
 		s.append(" ");
-		s.append(_dim * 100 / 22);
-		s.append("%");
+		s.append(_dim);
+		s.append(" (");
+		s.append(_dim * 100 / i);
+		s.append("%)");
 	}
 	return s.toString();
 }
