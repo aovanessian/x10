@@ -35,6 +35,7 @@ RING_DISABLE		("disable serial ring"),
 EEPROM_ERASE		("erase eeprom"),
 EEPROM_WRITE		("write eeprom"),
 CLOCK_SET		("set interface clock"),
+RESET			("reset interface"),
 LOG_LEVEL		("log level"),
 SCHEDULE		("schedule"),
 EXIT			("exit");

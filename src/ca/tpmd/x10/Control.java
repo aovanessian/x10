@@ -62,6 +62,7 @@ private static Command parse(String s)
 	case RING_ENABLE:
 	case RING_DISABLE:
 	case EEPROM_ERASE:
+	case RESET:
 		return new Command(command);
 	}
 	if (tokens.size() < 2) {
@@ -232,6 +233,8 @@ public static Cmd command(String s)
 		return Cmd.EEPROM_ERASE;
 	case "clock":
 		return Cmd.CLOCK_SET;
+	case "reset":
+		return Cmd.RESET;
 	case "sys":
 	case "system":
 	case "state":

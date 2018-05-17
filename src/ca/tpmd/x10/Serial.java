@@ -7,7 +7,6 @@ import java.util.ArrayList;
 final class Serial implements Runnable
 {
 
-private final static int HOUSE = 'O' - 'A';
 private final static byte[] _buf = new byte[32]; // feeling generous here
 private final static byte[] _sbuf = new byte[32];
 private final String _name;
@@ -224,7 +223,7 @@ private void parse_status(int n)
 		_buf[1] = (byte)(_last_addr & 0xff);
 		p = 1;
 		map <<= 1;
-		s.append("Continuing from where we left off...\n\t");
+		s.append("\u2026");
 	}
 	int b, c, z;
 	while (p < k) {
@@ -235,12 +234,13 @@ private void parse_status(int n)
 		p++;
 		_last_addr = 0;
 		if (b == 0) {
-			if (p == k) { // last byte is an address; function will come in next transmission
-				_last_addr = z | 0x100;
-				break;
-			}
 			s.append(X10.house(z >>> 4));
 			s.append(X10.unit(z & 0xf));
+			if (p == k) { // last byte is an address; function will come in next transmission
+				_last_addr = z | 0x100;
+				s.append("\u2026");
+				break;
+			}
 			s.append(" ");
 			continue;
 		}
@@ -417,6 +417,8 @@ private boolean sys_cmd(Command c)
 		return sys_cmd(CMD_RING_ENABLE);
 	case CLOCK_SET:
 		return set_clock(X10.code((c.house())), 0);
+	case RESET:
+		return set_clock(0, 7);
 	case EEPROM_ERASE:
 		return eeprom_erase();
 	case EEPROM_WRITE:
