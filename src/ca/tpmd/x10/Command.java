@@ -16,24 +16,12 @@ public Command(Cmd c)
 	this(c, -1, null, 0);
 }
 
-public Command(Cmd c, int house, int unit, int xcmd, int xdata)
-{
-	if (!c.x_cmd())
-		throw new IllegalArgumentException("not an extended command: " + c.label());
-	if (unit < 1 || unit > 16)
-		throw new IllegalArgumentException("Unit id outside allowed range: " + unit);
-	_command = c;
-	_house = house;
-	_units = 1 << X10.code(unit - 1);
-	_dim = xcmd;
-	_xdata = xdata;
-}
-
 Command(Cmd c, int house, int[] units, int dim)
 {
-	if (c.need_addr()) {
-		if (units == null)
+	if (units == null) {
+		if (c.need_addr())
 			throw new IllegalArgumentException(c.label() + ": need address");
+	} else {
 		for (int i = 0; i < units.length; i++)
 			if (units[i] < 1 || units[i] > 16)
 				throw new IllegalArgumentException("Unit id outside allowed range: " + units[i]);
@@ -68,6 +56,11 @@ byte[] getData()
 Cmd cmd()
 {
 	return _command;
+}
+
+int xcmd()
+{
+	return _command.xcmd();
 }
 
 String cmdLabel()

@@ -218,6 +218,7 @@ public static Cmd command(String s)
 	case "xdim":
 		return Cmd.XDIM;
 	case "xao":
+	case "xaoff":
 	case "x-all-off":
 	case "x_all_off":
 		return Cmd.X_ALL_OFF;

@@ -182,7 +182,7 @@ private boolean function(int house, int dim, int command)
 
 private boolean extended(int house, int unit, int data, int command)
 {
-	X10.debug("extended command: house " + X10.house(house) + ", unit " + unit + ", data " + data + ", command " + command);
+	X10.debug("extended command: house " + X10.house(house) + ", unit " + X10.unit(unit) + ", data " + data + ", command " + command);
 	_sbuf[0] = (byte)0xf;
 	_sbuf[1] = (byte)(house << 4 | 7);
 	_sbuf[2] = (byte)unit;
@@ -282,7 +282,14 @@ private void parse_status(int n)
 			c = (z << 5) + b - 60;
 			t.append(c);
 			t.append("\u00b0");
-			t.append(c < 50 ? 'C' : 'F');
+			if (c > 50) {
+				t.append("F (");
+				c = (int)Math.round((c - 32) * 50 / 9.);
+				t.append(c / 10.);
+				t.append("\u00b0C)");
+			} else {
+				t.append('C');
+			}
 			break;
 		}
 		s.append(t.toString());
@@ -397,7 +404,7 @@ private boolean xcmd(Command c)
 				break;
 		}
 	}
-	return extended(house, unit, 0xfe, 0x31);
+	return extended(house, unit, 0xfe, c.xcmd());
 }
 
 private static final String pad(int n)

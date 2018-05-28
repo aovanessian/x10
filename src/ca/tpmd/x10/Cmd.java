@@ -68,6 +68,12 @@ public static Cmd lookup(int n)
 	return values[n];
 }
 
+
+int xcmd()
+{
+	return xcmd;
+}
+
 public int code()
 {
 	switch (this) {
@@ -118,16 +124,7 @@ public int x10_data_len()
 
 boolean x_cmd()
 {
-	switch (this) {
-	case EXT_CODE_1:
-	case XON:
-	case XOFF:
-	case XDIM:
-	case X_ALL_ON:
-	case X_ALL_OFF:
-		return true;
-	}
-	return false;
+	return code() == EXT_CODE_1.ordinal();
 }
 
 boolean sys_cmd()
@@ -137,7 +134,14 @@ boolean sys_cmd()
 
 boolean need_addr()
 {
-	return this == ADDRESS;
+	switch (this) {
+	case ADDRESS:
+	case XON:
+	case XOFF:
+	case XDIM:
+		return true;
+	}
+	return false;
 }
 
 public boolean need_dim()
