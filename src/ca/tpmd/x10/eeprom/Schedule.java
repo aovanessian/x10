@@ -117,7 +117,6 @@ private final void adjust()
 		throw new IllegalArgumentException("no macros defined");
 	if (_timers.size() == 0 && _triggers.size() == 0)
 		throw new IllegalArgumentException("neither triggers nor timers defined");
-	X10.info("macros:\t\t" + _macros.size() + "\n\ttriggers:\t" + _triggers.size() + "\n\ttimers:\t\t" + _timers.size());
 	if (!_macros.get(_macros.size() - 1).name().equals("null")) {
 		_n2o.remove("null");
 		parse_line("macro null 0", -1); // add 'null' macro
@@ -134,7 +133,7 @@ private final void adjust()
 		tr = _triggers.get(i);
 		String name = tr.macro();
 		if (_n2o.get(name) == null) {
-			warn.add("Line " + tr.line() + ": trigger macro '" + tr.macro() + "' not defined, skipping");
+			warn.add("Line " + tr.line() + ": macro '" + tr.macro() + "' not defined, skipping trigger");
 			_triggers.remove(i);
 			continue;
 		}
@@ -145,12 +144,12 @@ private final void adjust()
 	while (i-- > 0) {
 		ti = _timers.get(i);
 		if (_n2o.get(ti.macro_start()) == null) {
-			warn.add("Line " + ti.line() + ": timer start macro '" + ti.macro_start() + "' not defined, skipping");
+			warn.add("Line " + ti.line() + ": timer start macro '" + ti.macro_start() + "' not defined, skipping timer");
 			_timers.remove(i);
 			continue;
 		}
 		if (_n2o.get(ti.macro_end()) == null) {
-			warn.add("Line " + ti.line() + ": timer end macro '" + ti.macro_end() + "' not defined, skipping");
+			warn.add("Line " + ti.line() + ": timer end macro '" + ti.macro_end() + "' not defined, skipping timer");
 			_timers.remove(i);
 			continue;
 		}
@@ -191,6 +190,7 @@ private final void adjust()
 	//	check for timers set to the same day/date/time - are these allowed?
 	
 	// verify we have not exceeded 1024 bytes
+	X10.info("macros:\t\t" + _macros.size() + "\n\ttriggers:\t" + _triggers.size() + "\n\ttimers:\t\t" + _timers.size());
 	int size_tr = _triggers.size() > 0 ? _triggers.size() * 3 + 2 : 0;
 	int size_ti = _timers.size() * 9 + 1;
 	int size_ma = 0;
@@ -201,7 +201,7 @@ private final void adjust()
 	X10.debug("macros: " + size_ma + ", triggers: " + size_tr + ", timers: " + size_ti);
 	if (size > 1024)
 		throw new IllegalArgumentException("schedule is too large (" + size + " bytes)");
-	X10.info("schedule size: " + size + " bytes (" + (1024 - size) + " free)");
+	X10.info("schedule size: " + size + " bytes (" + (1024 - size) + " free - enough for " + ((1024 - size) / 9) + " more timers)");
 }
 
 private final void parse() throws IOException
@@ -223,6 +223,7 @@ private static final void read_image(byte[] b, HashMap<Integer, String> o2n)
 		throw new IllegalArgumentException("Expecting 1024 bytes image, got " + b.length + "bytes");
 	byte[] tmp = new byte[3];
 	int n = (((b[0] & 0xff) << 8) | (b[1] & 0xff));
+	int triggers = n;
 	int lowest = 1022;
 	Trigger tr;
 	do {
@@ -251,18 +252,18 @@ private static final void read_image(byte[] b, HashMap<Integer, String> o2n)
 		X10.verbose(ti.toString());
 		
 	} while (true);
+	int z = (lowest < triggers) ? triggers : 1024; // triggers after macros
 	n = lowest;
-	tmp = new byte[1024 - n];
+	tmp = new byte[z - n];
 	Macro m;
 	String name;
 	do {
-		System.arraycopy(b, n, tmp, 0, 1024 - n);
+		System.arraycopy(b, n, tmp, 0, z - n);
 		name = o2n.get(n);
 		boolean offset = false;
 		if (name == null) {
-			name = o2n.get(++n);
+			name = o2n.get(n + 1);
 			offset = true;
-			n--;
 		}
 		m = new Macro(tmp, name, offset);
 		n += m.size();
