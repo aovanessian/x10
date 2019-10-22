@@ -333,7 +333,7 @@ private boolean parse_state(int n)
 	s.append(z == 0xffff ? "unknown - batteries dead?" : z);
 	if (z != 0xffff && z > 60 * 24 * 3)
 		s.append(" - replace batteries soon");
-	z = _buf[5] & 0xff | _buf[6] & 0x80;
+	z = _buf[5] & 0xff | ((_buf[6] & 0x80) << 1);
 	Calendar calendar = Calendar.getInstance();
 	calendar.set(Calendar.DAY_OF_YEAR, z);
 	s.append("\n\tDay of year: ");
@@ -478,7 +478,7 @@ private boolean eeprom_erase()
 	_sbuf[0] = (byte)CMD_EEPROM_DL;
 	_sbuf[1] = _sbuf[2] = _sbuf[3] = 0;
 	_sbuf[4] = 2;
-	for (int i = 5; i < 20; i++)
+	for (int i = 5; i < 19; i++)
 		_sbuf[i] = (byte)0xff;
 	_sbuf[19] = (byte)checksum(_sbuf, 1, 19);
 	return command(19, 2000);
@@ -498,7 +498,7 @@ private boolean set_clock(int house, int clear)
 	_sbuf[2] = (byte)(minute + ((hour & 1) * 60));
 	_sbuf[3] = (byte)(hour >> 1);
 	_sbuf[4] = (byte)(day & 0xff);
-	_sbuf[5] = (byte)((day >>> 15 ) << 7);
+	_sbuf[5] = (byte)((day >>> 8 ) << 7);
 	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house << 4) | clear);
 	_sbuf[7] = (byte)checksum(_sbuf, 1, 7);
