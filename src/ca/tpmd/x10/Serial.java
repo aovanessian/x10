@@ -404,7 +404,7 @@ private boolean xcmd(Command c)
 				break;
 		}
 	}
-	return extended(house, unit, 0xfe, c.xcmd());
+	return extended(house, unit, c.xdata(), c.xcmd());
 }
 
 private static final String pad(int n)
@@ -502,7 +502,7 @@ private boolean set_clock(int house, int clear)
 	_sbuf[5] |= (byte)(1 << wd);
 	_sbuf[6] = (byte)((house << 4) | clear);
 	_sbuf[7] = (byte)checksum(_sbuf, 1, 7);
-	return command(7, DELAY);
+	return command(7, clear == 0 ? DELAY : DELAY << 1);
 }
 
 private static final String port_settings(SerialPort port)

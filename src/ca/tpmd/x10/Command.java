@@ -22,6 +22,8 @@ Command(Cmd c, int house, int[] units, int dim)
 		if (c.need_addr())
 			throw new IllegalArgumentException(c.label() + ": need address");
 	} else {
+		if (c.x_cmd() && units.length != 1)
+			throw new IllegalArgumentException(c.label() + ": need only one address");
 		for (int i = 0; i < units.length; i++)
 			if (units[i] < 1 || units[i] > 16)
 				throw new IllegalArgumentException("Unit id outside allowed range: " + units[i]);
@@ -61,6 +63,13 @@ Cmd cmd()
 int xcmd()
 {
 	return _command.xcmd();
+}
+
+int xdata()
+{
+	if (_command.args() == 0)
+		return _command.xdata();
+	return _dim;
 }
 
 String cmdLabel()

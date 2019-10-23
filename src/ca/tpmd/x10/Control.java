@@ -88,7 +88,8 @@ private static Command parse(String s)
 		dim = number(tokens.get(token++));
 		if (dim == -1)
 			return null;
-		if (dim < 0 || dim > 31) {
+		int max = command.x_cmd() ? 63 : 31;
+		if (dim < 0 || dim > max) {
 			X10.err(command + " level outside of allowed range: " + dim);
 			return null;
 		}
@@ -96,9 +97,15 @@ private static Command parse(String s)
 	house = house(tokens.get(token++).toUpperCase(Locale.US));
 	if (house == -1)
 		return null;
-	if (command.need_addr() && tokens.size() == token)  {
-		X10.err("Need at least one unit for " + command);
-		return null;
+	if (command.need_addr()) {
+		if (tokens.size() == token)  {
+			X10.err("Need at least one unit for " + command);
+			return null;
+		}
+		if (command.x_cmd() && tokens.size() > token + 1) {
+			X10.err("Only one unit needed for " + command);
+			return null;
+		}
 	}
 	int[] units = tokens.size() == token ? null : new int[tokens.size() - token];
 	int n, k = 0;
@@ -112,6 +119,7 @@ private static Command parse(String s)
 		}
 		units[k++] = n;
 	}
+
 	return new Command(command, house, units, dim);
 }
 
@@ -211,6 +219,8 @@ public static Cmd command(String s)
 	case "addr":
 	case "address":
 		return Cmd.ADDRESS;
+	case "xion":
+		return Cmd.X_INSTANT_ON;
 	case "xon":
 		return Cmd.XON;
 	case "xoff":

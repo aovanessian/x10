@@ -23,6 +23,7 @@ STATUS_REQ		("status request"),
 ADDRESS			("address unit(s)"),
 PRESET_DIM		("preset dim"),
 
+X_INSTANT_ON		("extended on instant", 0x3f, 0x31),
 XON			("extended on", 0x3e, 0x31),
 XOFF			("extended off", 0x00, 0x31),
 XDIM			("extended preset", -1, 0x31),
@@ -74,9 +75,15 @@ int xcmd()
 	return xcmd;
 }
 
+int xdata()
+{
+	return xdata;
+}
+
 public int code()
 {
 	switch (this) {
+	case X_INSTANT_ON:
 	case XON:
 	case XOFF:
 	case XDIM:
@@ -136,6 +143,7 @@ boolean need_addr()
 {
 	switch (this) {
 	case ADDRESS:
+	case X_INSTANT_ON:
 	case XON:
 	case XOFF:
 	case XDIM:
@@ -146,7 +154,7 @@ boolean need_addr()
 
 public boolean need_dim()
 {
-	return this == DIM || this == BRIGHT || this == PRESET_DIM;
+	return this == DIM || this == BRIGHT || this == PRESET_DIM || this == XDIM;
 }
 
 String label()
