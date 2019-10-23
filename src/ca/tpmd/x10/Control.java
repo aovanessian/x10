@@ -61,8 +61,8 @@ private static Command parse(String s)
 	case SYSTEM_STATE:
 	case RING_ENABLE:
 	case RING_DISABLE:
-	case EEPROM_ERASE:
 	case RESET:
+	case RESET_BATTERY:
 		return new Command(command);
 	}
 	if (tokens.size() < 2) {
@@ -240,12 +240,13 @@ public static Cmd command(String s)
 		return Cmd.RING_ENABLE;
 	case "dr":
 		return Cmd.RING_DISABLE;
-	case "erase_macros":
-		return Cmd.EEPROM_ERASE;
 	case "clock":
 		return Cmd.CLOCK_SET;
 	case "reset":
 		return Cmd.RESET;
+	case "reset-battery":
+	case "reset_battery":
+		return Cmd.RESET_BATTERY;
 	case "sys":
 	case "system":
 	case "state":

@@ -30,6 +30,10 @@ private static final int CMD_RING_DISABLE = 0xdb;
 private static final int CMD_RING_ENABLE = 0xeb;
 private static final int CMD_EEPROM_DL = 0xfb;
 
+private static final int RESET_MONITOR = 1;
+private static final int RESET_BATTERY = 1 << 1;
+private static final int RESET_TIMERS = 1 << 2;
+
 static synchronized Serial create(String name)
 {
 	if (_serial == null)
@@ -425,7 +429,9 @@ private boolean sys_cmd(Command c)
 	case CLOCK_SET:
 		return set_clock(X10.code((c.house())), 0);
 	case RESET:
-		return set_clock(0, 7);
+		return set_clock(0, RESET_TIMERS | RESET_MONITOR);
+	case RESET_BATTERY:
+		return set_clock(0, RESET_BATTERY);
 	case EEPROM_ERASE:
 		return eeprom_erase();
 	case EEPROM_WRITE:
